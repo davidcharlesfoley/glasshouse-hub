@@ -275,7 +275,10 @@
   .msg { padding: 9px 11px; border-radius: 10px; margin-bottom: 8px; }
   .msg.user { background: var(--primary-soft); border: 1px solid var(--accent-border); }
   .msg.ai { background: #fff; border: 1px solid var(--border); }
-  .msg .role { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .msg .role { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .speak-btn { border: none; background: transparent; color: var(--muted); cursor: pointer; padding: 2px 6px; border-radius: 6px; font-size: 13px; line-height: 1; }
+  .speak-btn:hover { background: var(--accent-soft); color: var(--accent); }
+  .btn.voice-on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border); }
 
   /* Date Cards & Weather Strip */
   .date-card { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 10px; background: #fff; }
@@ -544,7 +547,8 @@
           <textarea id="aiInput" placeholder="Ask a question or tell me what to put on a bench..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault(); askAI();}"></textarea>
           <div class="row">
             <button class="btn soft-blue" onclick="openScanModal()">📷 Scan Photo</button>
-            <button class="btn" id="micAiBtn" onclick="toggleMic('aiInput','micAiBtn')">🎤</button>
+            <button class="btn" id="micAiBtn" onclick="toggleMic('aiInput','micAiBtn', askAI)">🎤 Talk</button>
+            <button class="btn voice-on" id="aiVoiceBtn" type="button" onclick="toggleVoiceReply()" title="Toggle spoken AI replies">🔊 Voice On</button>
             <button class="btn primary big" id="askAiBtn" onclick="askAI()">Ask AI</button>
           </div>
         </div>
@@ -774,7 +778,8 @@
     <div class="live-foot">
       <div class="row" style="gap:6px;">
         <button class="btn sm soft-blue" onclick="toggleLiveDrawer(false); openScanModal();">📷 Scan Photo</button>
-        <button class="btn sm" id="liveMicBtn" onclick="toggleMic('liveIn','liveMicBtn')">🎤 Talk</button>
+        <button class="btn sm" id="liveMicBtn" onclick="toggleMic('liveIn','liveMicBtn', sendLive)">🎤 Talk</button>
+        <button class="btn sm voice-on" id="liveVoiceBtn" type="button" onclick="toggleVoiceReply()" title="Toggle spoken AI replies">🔊 Voice On</button>
       </div>
       <div class="row" style="flex-wrap:nowrap;">
         <input type="text" id="liveIn" placeholder="Speak or type..." style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault(); sendLive();}">
@@ -897,9 +902,10 @@ function loadState() {
   return defaultState();
 }
 function loadConfig() {
-  let cfg = { firebaseUrl:'', geminiKey:'', geminiModel:'gemini-2.5-flash' };
+  let cfg = { firebaseUrl:'', geminiKey:'', geminiModel:'gemini-2.5-flash', voiceReply:true };
   try { const r = sGet(CONFIG_KEY); if (r) cfg = { ...cfg, ...JSON.parse(r) }; } catch(e){}
   cfg.geminiKey = String(cfg.geminiKey || '').trim();
+  if (cfg.voiceReply === undefined) cfg.voiceReply = true;
   return cfg;
 }
 
@@ -1555,47 +1561,205 @@ function quickLocalCommand(q) {
   }
   return null;
 }
+/* VOICE OUTPUT (TEXT-TO-SPEECH) */
+const spokenMsgs = [];
+let cachedVoices = [];
+let speechPrimed = false;
+
+function refreshVoices() {
+  if (!('speechSynthesis' in window)) return;
+  try { cachedVoices = window.speechSynthesis.getVoices() || []; } catch(e) {}
+}
+if ('speechSynthesis' in window) {
+  refreshVoices();
+  window.speechSynthesis.onvoiceschanged = refreshVoices;
+}
+function pickVoice() {
+  if (!cachedVoices.length) refreshVoices();
+  return cachedVoices.find(v => /^en-GB/i.test(v.lang) && /google|natural|online|libby|sonia|ryan|siri|daniel|serena/i.test(v.name))
+    || cachedVoices.find(v => /^en-GB/i.test(v.lang))
+    || cachedVoices.find(v => /^en/i.test(v.lang))
+    || cachedVoices[0] || null;
+}
+function primeSpeech() {
+  if (speechPrimed || !('speechSynthesis' in window) || !appConfig.voiceReply) return;
+  try {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0; u.rate = 10;
+    window.speechSynthesis.speak(u);
+    speechPrimed = true;
+  } catch(e) {}
+}
+function stopSpeaking() {
+  if ('speechSynthesis' in window) {
+    try { window.speechSynthesis.cancel(); } catch(e) {}
+  }
+}
+function cleanForSpeech(raw) {
+  return String(raw || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/[*_`#]+/g, '')
+    .replace(/[•·]/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function chunkForSpeech(text, maxLen = 180) {
+  if (text.length <= maxLen) return [text];
+  const sentences = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+  const chunks = [];
+  let cur = '';
+  for (const s of sentences) {
+    const piece = s.trim();
+    if (!piece) continue;
+    if ((cur + ' ' + piece).trim().length <= maxLen) {
+      cur = (cur + ' ' + piece).trim();
+    } else {
+      if (cur) chunks.push(cur);
+      cur = piece;
+    }
+  }
+  if (cur) chunks.push(cur);
+  return chunks;
+}
+function speakText(raw, force = false) {
+  if (!('speechSynthesis' in window)) {
+    if (force) toast('Voice playback is not supported in this browser');
+    return;
+  }
+  if (!force && !appConfig.voiceReply) return;
+  const text = cleanForSpeech(raw);
+  if (!text) return;
+  try {
+    window.speechSynthesis.cancel();
+    const voice = pickVoice();
+    const chunks = chunkForSpeech(text);
+    chunks.forEach(chunk => {
+      const u = new SpeechSynthesisUtterance(chunk);
+      if (voice) u.voice = voice;
+      u.lang = voice?.lang || 'en-GB';
+      u.rate = 1.0;
+      u.pitch = 1.0;
+      u.volume = 1.0;
+      window.speechSynthesis.speak(u);
+    });
+    window.speechSynthesis.resume();
+  } catch(e) {}
+}
+function speakMsgById(id) {
+  const txt = spokenMsgs[id];
+  if (txt) speakText(txt, true);
+}
+function updateVoiceUI() {
+  const on = appConfig.voiceReply !== false;
+  ['aiVoiceBtn', 'liveVoiceBtn'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.textContent = on ? '🔊 Voice On' : '🔇 Muted';
+    btn.classList.toggle('voice-on', on);
+  });
+}
+function toggleVoiceReply() {
+  appConfig.voiceReply = !(appConfig.voiceReply !== false);
+  sSet(CONFIG_KEY, JSON.stringify(appConfig));
+  updateVoiceUI();
+  if (appConfig.voiceReply) {
+    speechPrimed = true;
+    speakText('Voice replies on.', true);
+    toast('🔊 Voice replies on');
+  } else {
+    stopSpeaking();
+    toast('🔇 Voice replies muted');
+  }
+}
+
+function appendUserMsg(feed, text) {
+  const d = document.createElement('div');
+  d.className = 'msg user';
+  d.innerHTML = `<div class="role"><span>You</span></div>${esc(text)}`;
+  feed.appendChild(d);
+  feed.scrollTop = feed.scrollHeight;
+}
+function appendAiMsg(feed, role, htmlBody, spokenText) {
+  const id = spokenMsgs.length;
+  spokenMsgs.push(spokenText || '');
+  const d = document.createElement('div');
+  d.className = 'msg ai';
+  d.innerHTML = `<div class="role"><span>${esc(role)}</span><button type="button" class="speak-btn" onclick="speakMsgById(${id})" title="Read aloud">🔊</button></div>${htmlBody}`;
+  feed.appendChild(d);
+  feed.scrollTop = feed.scrollHeight;
+  return d;
+}
+
 async function runChat(q, feedId) {
+  primeSpeech();
   const feed = document.getElementById(feedId);
-  feed.innerHTML += `<div class="msg user"><div class="role">You</div>${esc(q)}</div>`;
+  appendUserMsg(feed, q);
   const acted = quickLocalCommand(q);
-  if (acted) { feed.innerHTML += `<div class="msg ai"><div class="role">Hub Action</div>${acted.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}</div>`; feed.scrollTop = feed.scrollHeight; return; }
+  if (acted) {
+    appendAiMsg(feed, 'Hub Action', acted.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>'), acted);
+    speakText(acted);
+    return;
+  }
   if (!appConfig.geminiKey) {
     const items = collectAll('ALL','','ALL').slice(0,12);
     const ans = items.length ? items.map(e => `• ${e.date} Z${e.zone} ${e.bench?'Bench '+e.bench:''}: ${e.text}`).join('<br>') : 'No bench entries logged yet. Add a Gemini key in Settings for full AI chat.';
-    feed.innerHTML += `<div class="msg ai"><div class="role">Local Hub</div>${ans}</div>`;
-    feed.scrollTop = feed.scrollHeight; return;
+    const spoken = items.length ? `Here are your latest ${Math.min(items.length, 3)} entries. ` + items.slice(0,3).map(e => `Zone ${e.zone} ${e.bench?'Bench '+e.bench:''}: ${e.text}`).join('. ') : 'No bench entries logged yet. Add your Gemini API key in Settings for full AI chat.';
+    appendAiMsg(feed, 'Local Hub', ans, spoken);
+    speakText(spoken);
+    return;
   }
+  const thinking = document.createElement('div');
+  thinking.className = 'msg ai';
+  thinking.innerHTML = `<div class="role"><span>Gemini AI</span></div><em>Thinking…</em>`;
+  feed.appendChild(thinking);
+  feed.scrollTop = feed.scrollHeight;
   const ctx = collectAll('ALL','','ALL').slice(0,40).map(e => `${e.date} Z${e.zone} Bench ${e.bench||'Gen'}: ${e.text}`).join('\n');
   try {
-    const { text } = await callGemini([{ text: `You are a concise UK glasshouse assistant. Active zone: Zone ${currentZone}.\nCurrent logs:\n${ctx}\n\nQuestion: ${q}` }]);
-    feed.innerHTML += `<div class="msg ai"><div class="role">Gemini AI</div>${esc(text).replace(/\n/g,'<br>')}</div>`;
+    const { text } = await callGemini([{ text: `You are a concise UK glasshouse assistant. Keep answers brief, clear, and natural for spoken voice replies (avoid markdown formatting). Active zone: Zone ${currentZone}.\nCurrent logs:\n${ctx}\n\nQuestion: ${q}` }]);
+    thinking.remove();
+    appendAiMsg(feed, 'Gemini AI', esc(text).replace(/\n/g,'<br>'), text);
+    speakText(text);
   } catch (e) {
-    feed.innerHTML += `<div class="msg ai"><div class="role">Notice</div>${esc(e.message)}</div>`;
+    thinking.remove();
+    appendAiMsg(feed, 'Notice', esc(e.message), e.message);
+    speakText(e.message);
   }
-  feed.scrollTop = feed.scrollHeight;
 }
 function askAI() { const el = document.getElementById('aiInput'), q = el.value.trim(); if (!q) return; el.value=''; runChat(q, 'aiFeed'); }
-function toggleLiveDrawer(open) { document.getElementById('liveDrawer').classList.toggle('open', open); document.getElementById('liveFab').style.display = open ? 'none' : 'inline-flex'; updateLiveCtx(); }
+function toggleLiveDrawer(open) {
+  document.getElementById('liveDrawer').classList.toggle('open', open);
+  document.getElementById('liveFab').style.display = open ? 'none' : 'inline-flex';
+  updateLiveCtx();
+  if (!open) stopSpeaking();
+}
 function updateLiveCtx() { const el = document.getElementById('liveCtx'); if (el) el.textContent = `Watching: Zone ${currentZone} · ${activeBenchesMap(currentZone).size} benches`; }
 function sendLive() { const el = document.getElementById('liveIn'), q = el.value.trim(); if (!q) return; el.value=''; runChat(q, 'liveFeed'); }
 
 /* VOICE DICTATION */
 let recog = null;
-function toggleMic(targetId, btnId) {
+function toggleMic(targetId, btnId, autoSendFn) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { toast('Use your phone keyboard mic button to dictate'); return; }
   const btn = document.getElementById(btnId);
   if (recog) { recog.stop(); recog = null; btn.classList.remove('listening'); return; }
+  stopSpeaking();
+  primeSpeech();
   recog = new SR(); recog.lang = 'en-GB'; recog.interimResults = false;
   btn.classList.add('listening');
   recog.onresult = e => {
     const inp = document.getElementById(targetId);
     const t = e.results[0][0].transcript;
     inp.value = inp.value ? inp.value + ' ' + t : t;
+    if (typeof autoSendFn === 'function' && inp.value.trim()) {
+      autoSendFn();
+    }
   };
   recog.onend = () => { btn.classList.remove('listening'); recog = null; };
-  recog.onerror = () => { btn.classList.remove('listening'); recog = null; toast('Mic blocked in preview — use keyboard mic'); };
+  recog.onerror = e => {
+    btn.classList.remove('listening'); recog = null;
+    toast(e?.error === 'not-allowed' ? 'Mic permission blocked — allow microphone or use keyboard mic' : 'Did not catch that — tap Talk to try again');
+  };
   recog.start();
 }
 
@@ -1682,7 +1846,7 @@ function updatePills() {
   const b = weekBounds(0);
   document.getElementById('weeklyPill').textContent = collectAll('ALL','','ALL').filter(e=>e.date>=b.start&&e.date<=b.end).length;
 }
-function renderAll() { updatePills(); updateKeyUI(); loadZone(currentZone); renderLogs(); renderCounts(); renderWeekly(); }
+function renderAll() { updatePills(); updateKeyUI(); updateVoiceUI(); loadZone(currentZone); renderLogs(); renderCounts(); renderWeekly(); }
 
 /* INIT */
 document.getElementById('liveDateText').textContent = new Date().toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
