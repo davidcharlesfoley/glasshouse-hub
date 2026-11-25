@@ -296,9 +296,14 @@
   .modal-bg.open { display: flex; }
   .modal { background: var(--card); max-width: 580px; width: 100%; border-radius: 18px; padding: 20px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); border: 1px solid var(--border); }
   .sect { border: 1px solid var(--border); border-radius: 12px; padding: 13px; margin-bottom: 12px; background: var(--card-soft); }
-  .scan-cards { display: flex; flex-direction: column; gap: 9px; max-height: 300px; overflow-y: auto; }
+  .scan-cards { display: flex; flex-direction: column; gap: 9px; max-height: 280px; overflow-y: auto; }
   .scan-card { background: var(--card-soft); border: 1px solid var(--border); border-radius: 11px; padding: 10px; display: flex; flex-direction: column; gap: 7px; }
   .scan-card select, .scan-card input { padding: 6px 8px; font-size: 12.5px; font-weight: 600; }
+  .scan-mode-bar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .scan-mode-btn { flex: 1; min-width: 150px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border-strong); background: #fff; color: var(--ink-2); font-size: 12.5px; font-weight: 700; cursor: pointer; text-align: center; transition: all 0.15s ease; }
+  .scan-mode-btn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 2px rgba(29,122,82,0.12); }
+  .scan-condensed { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px 10px; margin-bottom: 10px; background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: 10px; }
+  .scan-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: #fff; border: 1px solid var(--accent-border); font-size: 12px; font-weight: 700; color: var(--primary); }
 
   /* Floating Live AI Drawer */
   .live-fab {
@@ -657,15 +662,19 @@
 
   <!-- SCAN PHOTO MODAL -->
   <div class="modal-bg" id="scanModal" onclick="if(event.target===this) closeScanModal();">
-    <div class="modal" style="max-width:620px;">
+    <div class="modal" style="max-width:640px;">
       <div class="row" style="justify-content:space-between; align-items:flex-start; flex-wrap:nowrap; margin-bottom:12px;">
         <div>
           <h2>Scan Photo</h2>
-          <div style="font-size:12.5px; color:var(--muted); margin-top:2px;">Snap a notepad, label, or sheet — AI reads the writing so you can check and save it.</div>
+          <div style="font-size:12.5px; color:var(--muted); margin-top:2px;">Snap a check sheet, notepad, or label — AI extracts only the marked/needed info into a condensed form.</div>
         </div>
         <button class="btn sm ghost" style="flex-shrink:0;" onclick="closeScanModal()">✕ Close</button>
       </div>
       <div class="sect">
+        <div class="scan-mode-bar" role="group" aria-label="Scan extraction mode">
+          <button type="button" class="scan-mode-btn active" id="scanModeMarked" onclick="setScanMode('marked')">✓ Ticked / Marked Only</button>
+          <button type="button" class="scan-mode-btn" id="scanModeAll" onclick="setScanMode('all')">📄 All Written Items</button>
+        </div>
         <div class="row" style="margin-bottom:8px;">
           <label class="btn green big" for="camIn" style="cursor:pointer;">📷 Take Photo</label>
           <input type="file" id="camIn" accept="image/*" capture="environment" style="display:none;" onchange="handleScanFile(event)">
@@ -681,7 +690,7 @@
               <option value="6">Zone 6</option><option value="5">Zone 5</option><option value="4">Zone 4</option>
               <option value="3">Zone 3</option><option value="2">Zone 2</option><option value="1">Zone 1</option>
             </select>
-            <input type="text" id="scanHint" placeholder="Hint (e.g. Zone 8 Bench L)" style="flex:1;">
+            <input type="text" id="scanHint" placeholder="Hint (e.g. Watering check sheet, ticked benches only)" style="flex:1;">
             <button type="button" class="btn sm blue" id="rescanBtn" style="display:none;" onclick="runPhotoScan()">↻ Re-read</button>
           </div>
         </details>
@@ -699,9 +708,10 @@
       </div>
       <div id="scanResWrap" style="display:none;">
         <div class="row" style="justify-content:space-between; margin-bottom:8px;">
-          <strong id="scanSummary">Extracted Entries</strong>
+          <strong id="scanSummary">Condensed Form</strong>
           <button type="button" class="btn sm" onclick="addScanRow()">+ Add Line</button>
         </div>
+        <div id="scanCondensed" class="scan-condensed" style="display:none;"></div>
         <div id="scanCards" class="scan-cards"></div>
         <details class="more-toggle">
           <summary>See raw writing AI read ▾</summary>
@@ -709,6 +719,9 @@
         </details>
         <div class="row" style="margin-top:12px;">
           <button type="button" class="btn green big" id="scanSaveBtn" onclick="saveScanRows()">✅ Save to Hub</button>
+          <button type="button" class="btn primary" onclick="exportScanCSV()">📥 CSV File</button>
+          <button type="button" class="btn" onclick="exportScanTxt()">📄 Form (.txt)</button>
+          <button type="button" class="btn" onclick="copyScanSummary()">📋 Copy</button>
           <button type="button" class="btn ghost" onclick="closeScanModal()">Cancel</button>
         </div>
       </div>
@@ -1434,10 +1447,18 @@ async function callGemini(parts) {
 }
 
 /* PHOTO SCANNER (GALAXY S25 ULTRA CAMERA + GALLERY) */
-let scanB64 = null, scanRows = [];
+let scanB64 = null, scanRows = [], scanMode = 'marked', scanTitle = 'Condensed Form';
+function setScanMode(mode) {
+  scanMode = mode === 'all' ? 'all' : 'marked';
+  document.getElementById('scanModeMarked')?.classList.toggle('active', scanMode === 'marked');
+  document.getElementById('scanModeAll')?.classList.toggle('active', scanMode === 'all');
+  if (scanB64) runPhotoScan();
+}
 function openScanModal() {
   document.getElementById('scanDefZone').value = String(currentZone);
   document.getElementById('scanKeyWarn').style.display = appConfig.geminiKey ? 'none' : 'block';
+  document.getElementById('scanModeMarked')?.classList.toggle('active', scanMode === 'marked');
+  document.getElementById('scanModeAll')?.classList.toggle('active', scanMode === 'all');
   document.getElementById('scanModal').classList.add('open');
 }
 function closeScanModal() { document.getElementById('scanModal').classList.remove('open'); }
@@ -1462,6 +1483,7 @@ function compressPhoto(file, maxDim = 2200) {
 }
 async function handleScanFile(ev) {
   const f = ev.target.files?.[0]; if (!f) return;
+  primeSpeech();
   try {
     const { url, b64 } = await compressPhoto(f);
     scanB64 = b64;
@@ -1473,59 +1495,165 @@ async function handleScanFile(ev) {
   } catch (e) { toast('Could not load photo'); }
   ev.target.value = '';
 }
+function parseZoneAndBench(rawZone, rawBench, defZ) {
+  let z = parseInt(rawZone, 10);
+  let bStr = String(rawBench || '').trim();
+  const combo = bStr.match(/^(?:z(?:one)?\s*)?(\d{1,2})\s*[-·]?\s*([a-z0-9]+)$/i);
+  if (combo) {
+    const cz = parseInt(combo[1], 10);
+    if (cz >= 1 && cz <= 12) {
+      if (!z || z === defZ) z = cz;
+      bStr = combo[2];
+    }
+  }
+  z = Math.min(12, Math.max(1, z || defZ));
+  const b = normBench(z, bStr) || (z <= 2 ? '' : 'L');
+  return { zone: z, bench: b };
+}
+function scanBenchCode(r) {
+  return r.bench ? `${r.zone}${r.bench}` : `Z${r.zone}`;
+}
+function scanKindLabel(r) {
+  if (r.kind === 'watering') return `Watering (${methodLabel(r.method || 'bottom')})`;
+  if (r.kind === 'production') return r.qty ? `${r.qty} trays` : 'Trays';
+  if (r.kind === 'observation') return 'Zone Note';
+  return 'Bench Note';
+}
 async function runPhotoScan() {
   if (!scanB64) return;
+  primeSpeech();
   const st = document.getElementById('scanStatus');
   if (!appConfig.geminiKey) { document.getElementById('scanKeyWarn').style.display = 'block'; st.textContent = 'Add your Gemini API key in Settings first.'; return; }
-  st.textContent = 'Reading handwriting with AI...';
+  st.textContent = scanMode === 'marked' ? 'Picking out ticked & marked benches...' : 'Reading all written items with AI...';
   const defZ = +document.getElementById('scanDefZone').value || currentZone;
   const hint = document.getElementById('scanHint').value.trim();
   const t = todayISO();
-  const prompt = `Transcribe this glasshouse photo (handwritten note, whiteboard, label, plant list, or Water Diary). Today is ${t}. Default zone: Zone ${defZ}. Zones 1-2 are Rest; Zone 8 uses L/M/R; others L/R (or exact bench code written). ${hint ? 'Hint: '+hint : ''}\nReturn ONLY valid JSON: {"summary":"short title","rawTranscript":"text seen","entries":[{"kind":"stock|production|watering|observation","zone":${defZ},"bench":"L","text":"description","qty":0,"method":"bottom|top|spot|","date":"${t}"}]}`;
+  const modeInstr = scanMode === 'marked'
+    ? `CRITICAL FILTERING RULE — CONDENSED MARKED-ONLY MODE:
+If this photo is a printed check sheet, watering diary, table, or bench list, extract ONLY the rows/benches that are explicitly ticked (✓/✔), crossed (x/✗), circled, shaded, highlighted, underlined, initialled, or have handwritten notes/numbers/dates written next to them.
+COMPLETELY IGNORE all blank or unticked pre-printed rows/benches — do NOT output unticked benches.
+For handwritten notes or labels with no pre-printed checklist, extract just the concise actionable entries.`
+    : `Extract all written entries visible on this sheet, notepad, whiteboard, or label into concise structured form rows (skip decorative headers and blank rows).`;
+  const prompt = `You are a UK glasshouse form extractor. Today is ${t}. Default zone: Zone ${defZ}.
+${modeInstr}
+Bench code rules:
+- Decode shorthand like "4L" -> zone: 4, bench: "L"; "6R" -> zone: 6, bench: "R"; "8M" -> zone: 8, bench: "M".
+- Zones 1-2 are Rest (bench: ""); Zone 8 uses L/M/R; Zones 3-7 and 9-12 use L/R (or exact bench code written).
+- If a bench is ticked on a watering sheet (or ticked with no extra plant name), use kind: "watering" and method "bottom" (or "top"/"spot" if indicated), with a short note like "Ticked on sheet" or any written note.
+${hint ? 'User hint: ' + hint + '\n' : ''}Return ONLY valid JSON: {"summary":"short condensed title e.g. Ticked benches: 4L, 6R","rawTranscript":"brief list of marks/text seen","entries":[{"kind":"stock|production|watering|observation","zone":4,"bench":"L","text":"concise detail","qty":0,"method":"bottom|top|spot|","date":"${t}"}]}`;
   try {
     const { text, model } = await callGemini([{ text: prompt }, { inline_data: { mime_type:'image/jpeg', data: scanB64 } }]);
     const m = text.match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) : { entries: [], rawTranscript: text };
-    scanRows = (parsed.entries || []).map(e => ({
-      kind: ['stock','production','watering','observation'].includes(e.kind) ? e.kind : (+e.qty > 0 ? 'production' : 'stock'),
-      zone: Math.min(12, Math.max(1, parseInt(e.zone,10) || defZ)),
-      bench: normBench(+e.zone || defZ, e.bench) || (defZ <= 2 ? '' : 'L'),
-      text: String(e.text || '').trim(),
-      qty: Math.max(0, parseInt(e.qty,10) || 0),
-      method: normMethod(e.method) || 'bottom',
-      date: e.date || t
-    }));
+    scanRows = (parsed.entries || []).map(e => {
+      const { zone, bench } = parseZoneAndBench(e.zone, e.bench, defZ);
+      return {
+        kind: ['stock','production','watering','observation'].includes(e.kind) ? e.kind : (+e.qty > 0 ? 'production' : 'stock'),
+        zone,
+        bench,
+        text: String(e.text || '').trim(),
+        qty: Math.max(0, parseInt(e.qty,10) || 0),
+        method: normMethod(e.method) || 'bottom',
+        date: e.date || t
+      };
+    });
+    scanTitle = parsed.summary || (scanMode === 'marked' ? 'Ticked & Marked Form' : 'Scanned Form');
     document.getElementById('scanRaw').textContent = parsed.rawTranscript || text;
-    document.getElementById('scanSummary').textContent = `${parsed.summary || 'Scanned'} (${scanRows.length})`;
-    st.textContent = `Done (${model}) — review below and tap Save.`;
+    document.getElementById('scanSummary').textContent = `${scanTitle} (${scanRows.length})`;
+    st.textContent = scanRows.length
+      ? `Done (${model}) — condensed to ${scanRows.length} item${scanRows.length===1?'':'s'}. Review, save, or export below.`
+      : `Done (${model}) — no ticked or marked entries detected. Switch to "All Written Items" or add a line.`;
     renderScanCards();
+    if (scanRows.length) {
+      const codes = scanRows.slice(0, 6).map(r => r.bench ? `Zone ${r.zone} Bench ${r.bench}` : `Zone ${r.zone}`).join(', ');
+      speakText(`Picked up ${scanRows.length} ${scanRows.length===1?'item':'items'}: ${codes}.`);
+    } else {
+      speakText('No ticked or marked items were found on that sheet.');
+    }
   } catch (err) {
-    st.textContent = 'Could not connect from this preview — download glasshouse_hub.html and open in Chrome/Samsung Internet on your phone, or check your key.';
+    st.textContent = `Could not read photo (${err.message || 'check your Gemini key or internet connection'}).`;
   }
+}
+function renderScanCondensed() {
+  const box = document.getElementById('scanCondensed');
+  if (!box) return;
+  if (!scanRows.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'flex';
+  box.innerHTML = scanRows.map(r => {
+    const code = scanBenchCode(r);
+    const detail = r.kind === 'watering'
+      ? methodLabel(r.method || 'bottom')
+      : (r.qty > 0 ? `${r.qty} trays` : (r.text ? r.text.slice(0, 26) : scanKindLabel(r)));
+    return `<span class="scan-chip">✓ ${esc(code)} <span style="font-weight:500;color:var(--muted);">· ${esc(detail)}</span></span>`;
+  }).join('');
 }
 function renderScanCards() {
   document.getElementById('scanResWrap').style.display = 'block';
   document.getElementById('scanSaveBtn').textContent = `✅ Save to Hub (${scanRows.length})`;
+  document.getElementById('scanSummary').textContent = `${scanTitle} (${scanRows.length})`;
+  renderScanCondensed();
   const zOpts = [12,11,10,9,8,7,6,5,4,3,2,1];
-  document.getElementById('scanCards').innerHTML = scanRows.map((r, i) => `
+  document.getElementById('scanCards').innerHTML = scanRows.length ? scanRows.map((r, i) => `
     <div class="scan-card">
       <div class="row" style="gap:6px;">
         <select onchange="scanRows[${i}].kind=this.value;renderScanCards();">
+          <option value="watering" ${r.kind==='watering'?'selected':''}>Watering</option>
           <option value="stock" ${r.kind==='stock'?'selected':''}>Bench Note</option>
           <option value="production" ${r.kind==='production'?'selected':''}>Trays</option>
-          <option value="watering" ${r.kind==='watering'?'selected':''}>Watering</option>
           <option value="observation" ${r.kind==='observation'?'selected':''}>Zone Note</option>
         </select>
-        <select onchange="scanRows[${i}].zone=+this.value;">${zOpts.map(z=>`<option value="${z}" ${+r.zone===z?'selected':''}>Zone ${z}</option>`).join('')}</select>
-        <input type="text" value="${esc(r.bench)}" placeholder="Bench" style="width:78px;text-transform:uppercase;" onchange="scanRows[${i}].bench=normBench(scanRows[${i}].zone,this.value);">
-        ${r.kind==='watering'?`<select onchange="scanRows[${i}].method=this.value;"><option value="bottom" ${r.method==='bottom'?'selected':''}>Bottom</option><option value="top" ${r.method==='top'?'selected':''}>Top</option><option value="spot" ${r.method==='spot'?'selected':''}>Spot</option></select>`:''}
-        ${r.kind==='production'?`<input type="number" value="${r.qty}" style="width:68px;" onchange="scanRows[${i}].qty=+this.value||0;">`:''}
+        <select onchange="scanRows[${i}].zone=+this.value;renderScanCondensed();">${zOpts.map(z=>`<option value="${z}" ${+r.zone===z?'selected':''}>Zone ${z}</option>`).join('')}</select>
+        <input type="text" value="${esc(r.bench)}" placeholder="Bench" style="width:72px;text-transform:uppercase;" onchange="scanRows[${i}].bench=normBench(scanRows[${i}].zone,this.value);renderScanCondensed();">
+        ${r.kind==='watering'?`<select onchange="scanRows[${i}].method=this.value;renderScanCondensed();"><option value="bottom" ${r.method==='bottom'?'selected':''}>Bottom</option><option value="top" ${r.method==='top'?'selected':''}>Top</option><option value="spot" ${r.method==='spot'?'selected':''}>Spot</option></select>`:''}
+        ${r.kind==='production'?`<input type="number" value="${r.qty}" style="width:68px;" onchange="scanRows[${i}].qty=+this.value||0;renderScanCondensed();">`:''}
         <button class="icon-btn del" style="margin-left:auto;" onclick="scanRows.splice(${i},1);renderScanCards();">✕</button>
       </div>
-      <input type="text" value="${esc(r.text)}" placeholder="Description..." onchange="scanRows[${i}].text=this.value;">
-    </div>`).join('');
+      <input type="text" value="${esc(r.text)}" placeholder="Description..." onchange="scanRows[${i}].text=this.value;renderScanCondensed();">
+    </div>`).join('') : `<div style="padding:12px;text-align:center;font-size:12.5px;color:var(--muted);background:var(--card-soft);border:1px dashed var(--border-strong);border-radius:10px;">No marked items listed yet. Tap <strong>+ Add Line</strong> or switch to <strong>All Written Items</strong>.</div>`;
 }
-function addScanRow() { scanRows.push({ kind:'stock', zone:currentZone, bench:currentZone<=2?'':'L', text:'', qty:0, method:'bottom', date:todayISO() }); renderScanCards(); }
+function addScanRow() { scanRows.push({ kind:'watering', zone:currentZone, bench:currentZone<=2?'':'L', text:'', qty:0, method:'bottom', date:todayISO() }); renderScanCards(); }
+function buildScanSummaryText() {
+  const lines = [
+    `Glasshouse Condensed Form — ${todayISO()}`,
+    `${scanTitle} (${scanRows.length} item${scanRows.length===1?'':'s'})`,
+    '----------------------------------------',
+    ...scanRows.map(r => {
+      const code = scanBenchCode(r);
+      const loc = r.bench ? `Zone ${r.zone} Bench ${r.bench}` : `Zone ${r.zone}`;
+      const info = [scanKindLabel(r), r.text].filter(Boolean).join(' — ');
+      return `• ${code} (${loc}): ${info} [${r.date || todayISO()}]`;
+    })
+  ];
+  return lines.join('\n');
+}
+function exportScanCSV() {
+  if (!scanRows.length) { toast('Nothing to export yet'); return; }
+  const rows = [
+    ['Date', 'Code', 'Zone', 'Bench', 'Type', 'Method', 'Qty', 'Details'],
+    ...scanRows.map(r => [r.date || todayISO(), scanBenchCode(r), `Zone ${r.zone}`, r.bench || '', r.kind, r.kind === 'watering' ? (r.method || 'bottom') : '', r.qty || '', r.text || ''])
+  ];
+  dlCSV(rows, `glasshouse_form_${todayISO()}.csv`);
+  toast(`Downloaded CSV (${scanRows.length} rows)`);
+}
+function exportScanTxt() {
+  if (!scanRows.length) { toast('Nothing to export yet'); return; }
+  const txt = buildScanSummaryText();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' }));
+  a.download = `glasshouse_form_${todayISO()}.txt`;
+  a.click();
+  toast(`Downloaded condensed form (.txt)`);
+}
+function copyScanSummary() {
+  if (!scanRows.length) { toast('Nothing to copy yet'); return; }
+  const txt = buildScanSummaryText();
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(txt).then(() => toast('Copied condensed form!'));
+  } else {
+    const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    toast('Copied condensed form!');
+  }
+}
 function saveScanRows() {
   const valid = scanRows.filter(r => r.text || r.kind === 'watering'); if (!valid.length) return;
   const now = new Date().toLocaleString('en-GB');
