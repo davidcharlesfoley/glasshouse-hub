@@ -745,6 +745,15 @@
             <input type="password" id="geminiKeyIn" placeholder="Paste key here (starts with AIza...)" style="flex:1;">
             <button class="btn sm" type="button" onclick="const el=document.getElementById('geminiKeyIn'); el.type=el.type==='password'?'text':'password'; this.innerText=el.type==='password'?'Show':'Hide';">Show</button>
           </div>
+          <div class="row">
+            <label for="geminiModelSel" style="font-size:12px; font-weight:600; color:var(--muted);">Model:</label>
+            <select id="geminiModelSel" style="flex:1;" onchange="appConfig.geminiModel=this.value; sSet(CONFIG_KEY, JSON.stringify(appConfig)); updateKeyUI();">
+              <option value="gemini-3.8-flash">Gemini 3.8 Flash (Recommended)</option>
+              <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Fastest)</option>
+              <option value="gemini-4-hydrogen">Gemini 4 Hydrogen</option>
+            </select>
+          </div>
           <div id="keyTestBox" style="display:none; padding:8px 10px; border-radius:8px; font-size:12.5px;"></div>
           <div class="row">
             <button class="btn green big" onclick="saveKey()">Save Key</button>
@@ -915,9 +924,10 @@ function loadState() {
   return defaultState();
 }
 function loadConfig() {
-  let cfg = { firebaseUrl:'', geminiKey:'', geminiModel:'gemini-2.5-flash', voiceReply:true };
+  let cfg = { firebaseUrl:'', geminiKey:'', geminiModel:'gemini-3.8-flash', voiceReply:true };
   try { const r = sGet(CONFIG_KEY); if (r) cfg = { ...cfg, ...JSON.parse(r) }; } catch(e){}
   cfg.geminiKey = String(cfg.geminiKey || '').trim();
+  if (!cfg.geminiModel || /^gemini-2\./i.test(cfg.geminiModel)) cfg.geminiModel = 'gemini-3.8-flash';
   if (cfg.voiceReply === undefined) cfg.voiceReply = true;
   return cfg;
 }
@@ -1429,13 +1439,13 @@ function copyWeekly() {
 async function callGemini(parts) {
   const key = (appConfig.geminiKey || '').trim();
   if (!key) throw new Error('Add your free Gemini API key in Settings first.');
-  const models = [appConfig.geminiModel || 'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  const models = [appConfig.geminiModel || 'gemini-3.8-flash', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-4-hydrogen'];
   let lastErr = null;
   for (const m of Array.from(new Set(models))) {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(key)}`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{ parts }], generationConfig:{ temperature: 0.15 } })
+        body: JSON.stringify({ contents:[{ parts }] })
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error?.message || `HTTP ${r.status}`);
@@ -1895,8 +1905,11 @@ function toggleMic(targetId, btnId, autoSendFn) {
 function updateKeyUI() {
   const has = !!appConfig.geminiKey;
   const kp = document.getElementById('keyPill'), ap = document.getElementById('aiModePill'), qb = document.getElementById('quickKeyBanner');
+  const ms = document.getElementById('geminiModelSel');
+  if (ms && appConfig.geminiModel) ms.value = appConfig.geminiModel;
+  const shortModel = (appConfig.geminiModel || 'gemini-3.8-flash').replace(/^gemini-/i, 'Gemini ').replace(/-/g, ' ');
   if (kp) { kp.className = 'status-pill ' + (has ? 'synced' : 'local'); kp.textContent = has ? '✓ Key Saved' : 'Not set yet'; }
-  if (ap) { ap.className = 'status-pill ' + (has ? 'synced' : 'local'); ap.textContent = has ? 'Live Gemini' : 'Smart Local'; }
+  if (ap) { ap.className = 'status-pill ' + (has ? 'synced' : 'local'); ap.textContent = has ? shortModel : 'Smart Local'; }
   if (qb) qb.style.display = has ? 'none' : 'block';
 }
 function saveQuickKey() {
@@ -1911,6 +1924,8 @@ function saveQuickKey() {
 }
 function openSettings() {
   document.getElementById('geminiKeyIn').value = appConfig.geminiKey || '';
+  const ms = document.getElementById('geminiModelSel');
+  if (ms) ms.value = appConfig.geminiModel || 'gemini-3.8-flash';
   document.getElementById('fbUrlIn').value = appConfig.firebaseUrl || '';
   document.getElementById('keyTestBox').style.display = 'none';
   updateKeyUI();
@@ -1919,26 +1934,32 @@ function openSettings() {
 function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
 function saveKey() {
   appConfig.geminiKey = document.getElementById('geminiKeyIn').value.trim();
+  const ms = document.getElementById('geminiModelSel');
+  if (ms) appConfig.geminiModel = ms.value;
   sSet(CONFIG_KEY, JSON.stringify(appConfig));
   updateKeyUI();
   const box = document.getElementById('keyTestBox');
   box.style.display = 'block'; box.style.background = '#e9f6ef'; box.style.color = '#176342';
-  box.textContent = appConfig.geminiKey ? '✓ Gemini API key saved!' : 'Key cleared.';
+  box.textContent = appConfig.geminiKey ? `✓ Saved (${appConfig.geminiModel})!` : 'Key cleared.';
   toast(appConfig.geminiKey ? '✓ Key saved!' : 'Key cleared');
 }
 async function testKey() {
   const box = document.getElementById('keyTestBox');
   appConfig.geminiKey = document.getElementById('geminiKeyIn').value.trim();
+  const ms = document.getElementById('geminiModelSel');
+  if (ms) appConfig.geminiModel = ms.value;
   box.style.display = 'block'; box.style.background = '#edf6fc'; box.style.color = '#0d6ea8';
-  box.textContent = 'Testing connection...';
+  box.textContent = `Testing ${appConfig.geminiModel}...`;
   try {
     const { model } = await callGemini([{ text: 'Reply OK' }]);
+    appConfig.geminiModel = model;
+    if (ms) ms.value = model;
     sSet(CONFIG_KEY, JSON.stringify(appConfig)); updateKeyUI();
     box.style.background = '#e9f6ef'; box.style.color = '#176342';
     box.textContent = `✓ Connected using ${model}!`;
   } catch (e) {
     box.style.background = '#fef1f0'; box.style.color = '#a6261f';
-    box.textContent = `Could not reach Gemini here (${e.message}). Save your key and open the downloaded HTML in Chrome/Safari on your phone.`;
+    box.textContent = `Could not connect (${e.message}). Double-check your Gemini API key from aistudio.google.com/apikey.`;
   }
 }
 function saveSync() { appConfig.firebaseUrl = document.getElementById('fbUrlIn').value.trim(); sSet(CONFIG_KEY, JSON.stringify(appConfig)); pushCloud(); toast('Cloud sync saved'); }
