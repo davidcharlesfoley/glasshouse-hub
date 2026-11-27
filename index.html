@@ -575,8 +575,9 @@
         <div id="panel_stock">
           <div class="row">
             <span class="chip-label">Bench</span>
+            <select id="stockBenchNum" onchange="onZoneBenchNumChange(this.value, 'stock')" style="padding:6px 9px; font-size:12.5px; font-weight:700; display:none;"></select>
             <div id="stockBenchChips" class="row" style="gap:6px;"></div>
-            <input type="text" id="stockBenchInput" class="bench-custom" placeholder="Other bench (e.g. 4L, North)" oninput="onBenchType(this.value, 'stock')">
+            <input type="text" id="stockBenchInput" class="bench-custom" placeholder="Other bench (e.g. 14L, 7M)" oninput="onBenchType(this.value, 'stock')">
           </div>
           <div class="desc-row">
             <input type="text" id="descInput" list="plantHints" placeholder="What's on this bench? (e.g. Wallflowers Sunset, needs spacing...)" onkeydown="if(event.key==='Enter'){event.preventDefault(); saveBenchDesc(false);}">
@@ -604,8 +605,9 @@
         <div id="panel_water" style="display:none;">
           <div class="row" style="margin-bottom:10px;">
             <span class="chip-label">Bench</span>
+            <select id="waterBenchNum" onchange="onZoneBenchNumChange(this.value, 'water')" style="padding:6px 9px; font-size:12.5px; font-weight:700; display:none;"></select>
             <div id="waterBenchChips" class="row" style="gap:6px;"></div>
-            <input type="text" id="waterBenchInput" class="bench-custom" placeholder="Other bench (e.g. 4L, All)" oninput="onBenchType(this.value, 'water')">
+            <input type="text" id="waterBenchInput" class="bench-custom" placeholder="Other bench (e.g. 14L, All)" oninput="onBenchType(this.value, 'water')">
           </div>
           <div class="row" style="justify-content:space-between;">
             <div class="row" id="methodPills">
@@ -740,8 +742,9 @@
             <option value="12">Z12</option><option value="11">Z11</option><option value="10">Z10</option>
             <option value="9" selected>Z9</option><option value="8">Z8</option><option value="7">Z7</option>
             <option value="6">Z6</option><option value="5">Z5</option><option value="4">Z4</option><option value="3">Z3</option>
+            <option value="2">Z2</option><option value="1">Z1</option>
           </select>
-          <input type="text" id="npBench" placeholder="Bench (L/R)" style="width:96px;">
+          <input type="text" id="npBench" placeholder="Bench (e.g. 14L)" style="width:118px;">
           <input type="number" id="npTarget" placeholder="Target" style="width:80px;">
           <button class="btn primary" onclick="addProd()">Add</button>
         </div>
@@ -867,19 +870,22 @@
           <div class="pl-stamp-controls">
             <select id="plStampZone" onchange="onPlStampZoneChange(this.value)">
               <option value="">No stamp zone</option>
-              <option value="12">Zone 12</option><option value="11">Zone 11</option><option value="10">Zone 10</option>
-              <option value="9">Zone 9</option><option value="8">Zone 8</option><option value="7">Zone 7</option>
-              <option value="6">Zone 6</option><option value="5">Zone 5</option><option value="4">Zone 4</option>
-              <option value="3">Zone 3</option><option value="2">Zone 2</option><option value="1">Zone 1</option>
+              <option value="12">Zone 12 (1–25 L/R)</option><option value="11">Zone 11 (1–25 L/R)</option><option value="10">Zone 10 (1–25 L/R)</option>
+              <option value="9">Zone 9 (1–25 L/R)</option><option value="8">Zone 8 (1–15 L/M/R)</option><option value="7">Zone 7 (1–25 L/R)</option>
+              <option value="6">Zone 6 (1–25 L/R)</option><option value="5">Zone 5 (1–25 L/R)</option><option value="4">Zone 4 (1–25 L/R)</option>
+              <option value="3">Zone 3 (1–25 L/R)</option><option value="2">Zone 2 (L/R)</option><option value="1">Zone 1 (L/R)</option>
               <option value="Outside">Outside</option><option value="Cold Frame">Cold Frame</option>
               <option value="Tunnel">Tunnel</option><option value="Standing Out">Standing Out</option>
             </select>
-            <select id="plStampBench" onchange="plStamp.bench=this.value; renderPlantListItems();">
-              <option value="">Bench...</option>
-              <option value="L">Bench L</option>
-              <option value="R">Bench R</option>
+            <select id="plStampNum" onchange="plStamp.benchNum=this.value; renderPlantListItems();" style="display:none;">
+              <option value="">Bench #...</option>
             </select>
-            <input type="text" id="plStampCustomBench" placeholder="Custom bench (e.g. 4L)" style="width:165px;" oninput="plStamp.customBench=this.value.trim().toUpperCase(); renderPlantListItems();">
+            <select id="plStampBench" onchange="plStamp.bench=this.value; renderPlantListItems();">
+              <option value="">Side...</option>
+              <option value="L">Left (L)</option>
+              <option value="R">Right (R)</option>
+            </select>
+            <input type="text" id="plStampCustomBench" placeholder="Or custom (e.g. 14L)" style="width:140px;" oninput="plStamp.customBench=this.value.trim().toUpperCase(); renderPlantListItems();">
             <select id="plStampLoc" onchange="onPlStampLocChange(this.value)">
               <option value="">Location / Spot...</option>
               <option value="Front">Front</option>
@@ -1160,20 +1166,39 @@ function entryDate(e) {
   if (e.timestamp) { const d = new Date(+e.timestamp); if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
   return '';
 }
+function splitBenchCode(raw) {
+  const s = String(raw || '').trim().toUpperCase();
+  const m = s.match(/^(\d{1,2})\s*([LMR])?$/);
+  if (m) return { num: m[1], side: m[2] || '' };
+  if (/^[LMR]$/.test(s)) return { num: '', side: s };
+  return { num: '', side: '' };
+}
+function joinBenchCode(num, side) {
+  const n = String(num || '').replace(/\D/g, '');
+  const s = String(side || '').trim().toUpperCase();
+  return (n + s).trim();
+}
 function sortBench(a, b) {
   const ord = { L:1, M:2, R:3 };
-  const pa = ord[a] ? [0, ord[a], a] : (/^(\d+)([A-Z]*)$/.test(a) ? [1, parseInt(a,10), a] : [2, 999, a]);
-  const pb = ord[b] ? [0, ord[b], b] : (/^(\d+)([A-Z]*)$/.test(b) ? [1, parseInt(b,10), b] : [2, 999, b]);
-  return pa[0]-pb[0] || pa[1]-pb[1] || String(pa[2]).localeCompare(String(pb[2]));
+  const parse = v => {
+    const s = String(v || '').toUpperCase();
+    if (ord[s]) return [0, ord[s], 0, s];
+    const m = s.match(/^(\d+)([A-Z]*)$/);
+    if (m) return [1, parseInt(m[1], 10), ord[m[2]] || 9, s];
+    return [2, 999, 9, s];
+  };
+  const pa = parse(a), pb = parse(b);
+  return pa[0]-pb[0] || pa[1]-pb[1] || pa[2]-pb[2] || pa[3].localeCompare(pb[3]);
 }
 function normBench(z, raw) {
-  if (z <= 2) return '';
   let s = String(raw || '').trim().replace(/^bench\s+/i, '').trim().toUpperCase();
   if (!s || s === 'ALL' || s === 'GENERAL') return '';
-  if (s === 'LEFT' || s === 'LEFT SIDE') return 'L';
-  if (s === 'RIGHT' || s === 'RIGHT SIDE') return 'R';
-  if (s === 'MIDDLE' || s === 'MID') return 'M';
-  return s.slice(0, 24);
+  s = s.replace(/\bLEFT(?:\s+SIDE)?\b/g, 'L').replace(/\bRIGHT(?:\s+SIDE)?\b/g, 'R').replace(/\bMID(?:DLE)?\b/g, 'M');
+  const numSide = s.match(/^(\d{1,2})\s*[-·]?\s*([LMR])$/);
+  if (numSide) return numSide[1] + numSide[2];
+  const sideNum = s.match(/^([LMR])\s*[-·]?\s*(\d{1,2})$/);
+  if (sideNum) return sideNum[2] + sideNum[1];
+  return s.replace(/\s+/g, ' ').slice(0, 24);
 }
 function normMethod(raw) {
   const s = String(raw || '').toLowerCase();
@@ -1186,7 +1211,9 @@ function methodLabel(m) { return m === 'top' ? 'T · Top' : m === 'spot' ? 'S ·
 
 const zoneDefs = {};
 for (let i = 1; i <= 12; i++) {
-  zoneDefs[i] = i <= 2 ? { type:'rest', letters:[] } : (i === 8 ? { type:'LMR', letters:['L','M','R'] } : { type:'LR', letters:['L','R'] });
+  if (i <= 2) zoneDefs[i] = { type:'LR', letters:['L','R'], maxBench:0 };
+  else if (i === 8) zoneDefs[i] = { type:'LMR', letters:['L','M','R'], maxBench:15 };
+  else zoneDefs[i] = { type:'LR', letters:['L','R'], maxBench:25 };
 }
 
 function defaultState() {
@@ -1342,10 +1369,11 @@ function renderZoneNav() {
   nav.innerHTML = '';
   for (let i = 1; i <= 12; i++) {
     const btn = document.createElement('button');
-    const isRest = i <= 2;
-    const cnt = isRest ? (appState.zones[i].waterLogs || []).length : activeBenchesMap(i).size;
-    btn.className = `zone-btn${isRest ? ' rest' : ''}${cnt > 0 ? ' has-data' : ''}${i === currentZone ? ' active' : ''}`;
-    const sub = isRest ? (cnt ? `${cnt} watered` : 'Rest') : (cnt ? `${cnt} bench${cnt===1?'':'es'}` : (i === 8 ? 'L · M · R' : 'L · R'));
+    const def = zoneDefs[i];
+    const cnt = activeBenchesMap(i).size;
+    btn.className = `zone-btn${cnt > 0 ? ' has-data' : ''}${i === currentZone ? ' active' : ''}`;
+    const defSub = def.maxBench ? `1–${def.maxBench} ${def.letters.join('·')}` : def.letters.join(' · ');
+    const sub = cnt ? `${cnt} bench${cnt===1?'':'es'}` : defSub;
     btn.innerHTML = `<span>Zone ${i}</span><span class="zone-sub">${sub}</span>`;
     btn.onclick = () => { editingKey = null; loadZone(i); };
     nav.appendChild(btn);
@@ -1362,44 +1390,71 @@ function loadZone(z) {
 
   const comp = document.getElementById('zoneComposer');
   const bar = document.getElementById('benchesToolbar');
-  const content = document.getElementById('zoneContent');
-
-  if (def.type === 'rest') {
-    comp.style.display = 'none'; bar.style.display = 'none';
-    document.getElementById('zoneSummary').textContent = 'Rest Zone';
-    const logs = zd.waterLogs || [];
-    content.innerHTML = `
-      <div class="empty-box">
-        <strong>Rest Zone ${z}</strong>
-        <p>${logs[0] ? 'Last watered: ' + esc(fmtDate(entryDate(logs[0]))) : 'Not watered recently'}</p>
-        <button class="btn green" onclick="logRestWater()">💧 Log Watered Today</button>
-        <div style="margin-top:14px; text-align:left; max-width:420px; margin-inline:auto;">
-          ${logs.slice(0,8).map(w => `<div class="item-row"><span>💧 Watered · <strong>${esc(fmtDate(entryDate(w)))}</strong></span><button class="icon-btn del" onclick="delWater('${w.id}')">✕</button></div>`).join('')}
-        </div>
-      </div>`;
-  } else {
-    comp.style.display = 'block'; bar.style.display = 'flex';
-    const active = activeBenchesMap(z);
-    if (!def.letters.includes(stockBench) && !active.has(stockBench)) stockBench = def.letters[0];
-    if (waterTarget !== 'ALL' && !def.letters.includes(waterTarget) && !active.has(waterTarget)) waterTarget = def.letters[0];
-    renderChips(z);
-    renderDayPills();
-    renderPlantHints();
-    renderBenches(z);
-  }
+  comp.style.display = 'block'; bar.style.display = 'flex';
+  const active = activeBenchesMap(z);
+  const sSp = splitBenchCode(stockBench);
+  if (!active.has(stockBench) && (!def.letters.includes(sSp.side) || (sSp.num && (+sSp.num > def.maxBench)))) stockBench = def.letters[0];
+  const wSp = splitBenchCode(waterTarget);
+  if (waterTarget !== 'ALL' && !active.has(waterTarget) && (!def.letters.includes(wSp.side) || (wSp.num && (+wSp.num > def.maxBench)))) waterTarget = def.letters[0];
+  renderChips(z);
+  renderDayPills();
+  renderPlantHints();
+  renderBenches(z);
   renderObs();
   updateLiveCtx();
 }
 
+function buildBenchNumOptions(maxBench, curNum) {
+  let html = `<option value="">Whole side</option>`;
+  for (let n = 1; n <= maxBench; n++) {
+    html += `<option value="${n}" ${String(curNum)===String(n)?'selected':''}>Bench ${n}</option>`;
+  }
+  return html;
+}
 function renderChips(z) {
   const def = zoneDefs[z], active = activeBenchesMap(z);
-  const codes = Array.from(new Set([...def.letters, ...Array.from(active.keys()).filter(k => k !== 'GENERAL')])).sort(sortBench);
-  document.getElementById('stockBenchChips').innerHTML = codes.map(c =>
+  const sSp = splitBenchCode(stockBench);
+  const wSp = waterTarget === 'ALL' ? { num:'', side:'' } : splitBenchCode(waterTarget);
+
+  const sNumEl = document.getElementById('stockBenchNum');
+  const wNumEl = document.getElementById('waterBenchNum');
+  if (def.maxBench > 0) {
+    sNumEl.style.display = 'inline-block';
+    sNumEl.innerHTML = buildBenchNumOptions(def.maxBench, sSp.num);
+    wNumEl.style.display = 'inline-block';
+    wNumEl.innerHTML = buildBenchNumOptions(def.maxBench, wSp.num);
+  } else {
+    sNumEl.style.display = 'none';
+    wNumEl.style.display = 'none';
+  }
+
+  const sSideChoices = def.letters.map(l => sSp.num ? joinBenchCode(sSp.num, l) : l);
+  const sCodes = Array.from(new Set([...sSideChoices, ...Array.from(active.keys()).filter(k => k !== 'GENERAL')])).sort(sortBench);
+  document.getElementById('stockBenchChips').innerHTML = sCodes.map(c =>
     `<button type="button" class="bench-chip${stockBench===c?' active':''}" onclick="pickBench('${esc(c)}','stock')">Bench ${esc(c)}${active.has(c)?'<span class="dot"></span>':''}</button>`
   ).join('');
-  document.getElementById('waterBenchChips').innerHTML = codes.map(c =>
+
+  const wSideChoices = def.letters.map(l => wSp.num ? joinBenchCode(wSp.num, l) : l);
+  const wCodes = Array.from(new Set([...wSideChoices, ...Array.from(active.keys()).filter(k => k !== 'GENERAL')])).sort(sortBench);
+  document.getElementById('waterBenchChips').innerHTML = wCodes.map(c =>
     `<button type="button" class="bench-chip${waterTarget===c?' w-active':''}" onclick="pickBench('${esc(c)}','water')">Bench ${esc(c)}</button>`
   ).join('') + `<button type="button" class="bench-chip${waterTarget==='ALL'?' w-active':''}" onclick="pickBench('ALL','water')">All (${def.letters.join('/')})</button>`;
+}
+function onZoneBenchNumChange(num, kind) {
+  const def = zoneDefs[currentZone];
+  if (kind === 'stock') {
+    const sp = splitBenchCode(stockBench);
+    const side = def.letters.includes(sp.side) ? sp.side : def.letters[0];
+    stockBench = joinBenchCode(num, side);
+    document.getElementById('stockBenchInput').value = '';
+    renderChips(currentZone);
+  } else {
+    const sp = waterTarget === 'ALL' ? { side: def.letters[0] } : splitBenchCode(waterTarget);
+    const side = def.letters.includes(sp.side) ? sp.side : def.letters[0];
+    waterTarget = joinBenchCode(num, side);
+    document.getElementById('waterBenchInput').value = '';
+    renderChips(currentZone);
+  }
 }
 function pickBench(c, kind) {
   if (kind === 'stock') {
@@ -1448,7 +1503,7 @@ function renderDayPills() {
 function renderPlantHints() {
   const set = new Set();
   (appState.productionList||[]).forEach(p => p.variety && set.add(p.variety));
-  for (let z = 3; z <= 12; z++) (appState.zones[z].stockLogs||[]).forEach(s => s.text && set.add(s.text));
+  for (let z = 1; z <= 12; z++) (appState.zones[z].stockLogs||[]).forEach(s => s.text && set.add(s.text));
   document.getElementById('plantHints').innerHTML = Array.from(set).sort().slice(0,80).map(n => `<option value="${esc(n)}"></option>`).join('');
 }
 
@@ -1821,7 +1876,7 @@ async function handleScanFile(ev) {
 function parseZoneAndBench(rawZone, rawBench, defZ) {
   let z = parseInt(rawZone, 10);
   let bStr = String(rawBench || '').trim();
-  const combo = bStr.match(/^(?:z(?:one)?\s*)?(\d{1,2})\s*[-·]?\s*([a-z0-9]+)$/i);
+  const combo = bStr.match(/^z(?:one)?\s*(\d{1,2})\s*[-·]?\s*([a-z0-9]+)$/i);
   if (combo) {
     const cz = parseInt(combo[1], 10);
     if (cz >= 1 && cz <= 12) {
@@ -1830,11 +1885,11 @@ function parseZoneAndBench(rawZone, rawBench, defZ) {
     }
   }
   z = Math.min(12, Math.max(1, z || defZ));
-  const b = normBench(z, bStr) || (z <= 2 ? '' : 'L');
+  const b = normBench(z, bStr) || 'L';
   return { zone: z, bench: b };
 }
 function scanBenchCode(r) {
-  return r.bench ? `${r.zone}${r.bench}` : `Z${r.zone}`;
+  return r.bench ? `Z${r.zone}·${r.bench}` : `Z${r.zone}`;
 }
 function scanKindLabel(r) {
   if (r.kind === 'watering') return `Watering (${methodLabel(r.method || 'bottom')})`;
@@ -1860,10 +1915,11 @@ For handwritten notes or labels with no pre-printed checklist, extract just the 
   const prompt = `You are a UK glasshouse form extractor. Today is ${t}. Default zone: Zone ${defZ}.
 ${modeInstr}
 Bench code rules:
-- Decode shorthand like "4L" -> zone: 4, bench: "L"; "6R" -> zone: 6, bench: "R"; "8M" -> zone: 8, bench: "M".
-- Zones 1-2 are Rest (bench: ""); Zone 8 uses L/M/R; Zones 3-7 and 9-12 use L/R (or exact bench code written).
+- Zones 1-2 have Left/Right benches (bench: "L" or "R").
+- Zones 3-7 and 9-12 have numbered benches 1 to 25 Left and Right (e.g. "1L"–"25L", "1R"–"25R", or whole side "L"/"R").
+- Zone 8 has numbered benches 1 to 15 Left, Middle, and Right (e.g. "1L"–"15L", "1M"–"15M", "1R"–"15R", or "L"/"M"/"R").
 - If a bench is ticked on a watering sheet (or ticked with no extra plant name), use kind: "watering" and method "bottom" (or "top"/"spot" if indicated), with a short note like "Ticked on sheet" or any written note.
-${hint ? 'User hint: ' + hint + '\n' : ''}Return ONLY valid JSON: {"summary":"short condensed title e.g. Ticked benches: 4L, 6R","rawTranscript":"brief list of marks/text seen","entries":[{"kind":"stock|production|watering|observation","zone":4,"bench":"L","text":"concise detail","qty":0,"method":"bottom|top|spot|","date":"${t}"}]}`;
+${hint ? 'User hint: ' + hint + '\n' : ''}Return ONLY valid JSON: {"summary":"short condensed title e.g. Ticked benches: Z4 14L, Z8 7M","rawTranscript":"brief list of marks/text seen","entries":[{"kind":"stock|production|watering|observation","zone":4,"bench":"14L","text":"concise detail","qty":0,"method":"bottom|top|spot|","date":"${t}"}]}`;
   try {
     const { text, model } = await callGemini([{ text: prompt }, { inline_data: { mime_type:'image/jpeg', data: scanB64 } }]);
     const m = text.match(/\{[\s\S]*\}/);
@@ -2030,16 +2086,26 @@ function extractLocationFromText(q) {
     const ez = PL_EXTRA_ZONES.find(x => q.toLowerCase().includes(x.toLowerCase()));
     if (ez) zone = ez;
   }
-  const bm = q.match(/\bbench\s+([a-z0-9]+)\b/i);
-  if (bm) bench = normBench(parseInt(zone, 10) || 9, bm[1]) || bm[1].toUpperCase();
-  else {
-    const combo = q.match(/\b(\d{1,2})\s*([lmr])\b/i);
-    if (combo) {
-      const cz = parseInt(combo[1], 10);
-      if (cz >= 3 && cz <= 12) { if (!zone) zone = String(cz); bench = combo[2].toUpperCase(); }
+  const zn = parseInt(zone, 10) || 9;
+  const qNoZone = q.replace(/\bzone\s*\d{1,2}\b/ig, ' ').replace(/\bz\d{1,2}\b/ig, ' ');
+  const bmFull = qNoZone.match(/\bbench\s+(\d{1,2}\s*(?:left|right|middle|mid|[lmr])|(?:left|right|middle|mid|[lmr])\s*\d{1,2}|\d{1,2}|left|right|middle|mid|[a-z0-9]+)\b/i);
+  if (bmFull) {
+    bench = normBench(zn, bmFull[1]);
+  } else {
+    const numSide = qNoZone.match(/\b(\d{1,2})\s*(left|right|middle|mid|[lmr])\b/i);
+    const sideNum = qNoZone.match(/\b(left|right|middle|mid)\s*(\d{1,2})\b/i);
+    if (numSide && parseInt(numSide[1], 10) <= 25) {
+      bench = normBench(zn, numSide[1] + ' ' + numSide[2]);
+    } else if (sideNum && parseInt(sideNum[2], 10) <= 25) {
+      bench = normBench(zn, sideNum[2] + ' ' + sideNum[1]);
+    } else if (zone && /\b(left|right|middle)\b/i.test(qNoZone)) {
+      const sm = qNoZone.match(/\b(left|right|middle)\b/i);
+      if (sm) bench = normBench(zn, sm[1]);
     }
   }
-  const loc = PL_LOC_PRESETS.find(x => new RegExp(`\\b${x.replace(/\s+/g, '\\s+')}\\b`, 'i').test(q));
+  // Ignore "middle" as spot if it was already used as Zone 8 Middle bench side
+  const locPresets = (zone === '8' && /M$/.test(bench)) ? PL_LOC_PRESETS.filter(x => x !== 'Middle') : PL_LOC_PRESETS;
+  const loc = locPresets.find(x => new RegExp(`\\b${x.replace(/\s+/g, '\\s+')}\\b`, 'i').test(q));
   if (loc) location = loc;
   else {
     const bayM = q.match(/\b(bay\s*\d+|near\s+[a-z]+)\b/i);
@@ -2104,7 +2170,15 @@ function quickPlantListCommand(q) {
       const it = hits[0];
       const loc = extractLocationFromText(q);
       const isReset = /\b(reset|undo|not\s+done|to\s*do|todo)\b/i.test(ql);
-      const cleanedForQty = q.replace(/\bzone\s*\d{1,2}\b/ig, '').replace(/\bz\d{1,2}\b/ig, '').replace(/\bbench\s+[a-z0-9]+\b/ig, '').replace(/\bbay\s*\d+\b/ig, '').replace(/\b\d{1,2}[lmr]\b/ig, '').replace(/\bweek\s*\d{1,2}\b/ig, '').replace(/\b\d+l\b/ig, '');
+      const cleanedForQty = q
+        .replace(/\bzone\s*\d{1,2}\b/ig, '')
+        .replace(/\bz\d{1,2}\b/ig, '')
+        .replace(/\bbench\s+(?:\d{1,2}\s*(?:left|right|middle|mid|[lmr])|(?:left|right|middle|mid|[lmr])\s*\d{1,2}|[a-z0-9]+)\b/ig, '')
+        .replace(/\b\d{1,2}\s*(?:left|right|middle|mid|[lmr])\b/ig, '')
+        .replace(/\b(?:left|right|middle|mid)\s*\d{1,2}\b/ig, '')
+        .replace(/\bbay\s*\d+\b/ig, '')
+        .replace(/\bweek\s*\d{1,2}\b/ig, '')
+        .replace(/\b\d+l\b/ig, '');
       const numM = cleanedForQty.match(/\b(\d+)\b/);
       const qtyNum = numM ? parseInt(numM[1], 10) : null;
 
@@ -2145,18 +2219,20 @@ function quickPlantListCommand(q) {
 function quickLocalCommand(q) {
   const plAct = quickPlantListCommand(q);
   if (plAct) return plAct;
-  const zm = q.match(/zone\s*(\d{1,2})/i), z = zm ? Math.min(12, Math.max(1, +zm[1])) : currentZone;
-  const bm = q.match(/bench\s+([a-z0-9]+)/i), b = bm ? normBench(z, bm[1]) : '';
-  if (/water(ed|ing)?/i.test(q) && (zm || bm)) {
+  const loc = extractLocationFromText(q);
+  const zm = /^\d+$/.test(loc.zone);
+  const z = zm ? Math.min(12, Math.max(1, parseInt(loc.zone, 10))) : currentZone;
+  const b = loc.bench || '';
+  if (/water(ed|ing)?/i.test(q) && (zm || b)) {
     const m = /top|lance/i.test(q) ? 'top' : /spot/i.test(q) ? 'spot' : 'bottom';
-    const target = b || (z<=2?'':'L');
+    const target = b || 'L';
     appState.zones[z].waterLogs.unshift({ id:'wat_'+Date.now(), bench:target, date:todayISO(), method:m, note:'', timestamp:Date.now(), time:new Date().toLocaleString('en-GB') });
     saveState(true); if (currentTab==='zones') loadZone(z);
     return `Logged **${methodLabel(m)}** watering for **Zone ${z}${target?' · Bench '+target:''}** today.`;
   }
-  const putM = q.match(/(?:put|add|log|set)\s+(.+?)\s+(?:on|in|to)\s+zone\s*(\d{1,2})(?:\s+bench\s+([a-z0-9]+))?/i);
+  const putM = q.match(/(?:put|add|log|set)\s+(.+?)\s+(?:on|in|to)\s+zone\s*(\d{1,2})(?:\s+(?:bench\s+)?(.+))?/i);
   if (putM) {
-    const txt = putM[1].trim(), tz = Math.min(12, Math.max(3, +putM[2])), tb = normBench(tz, putM[3] || 'L') || 'L';
+    const txt = putM[1].trim(), tz = Math.min(12, Math.max(1, +putM[2])), tb = b || normBench(tz, putM[3] || 'L') || 'L';
     appState.zones[tz].stockLogs.unshift({ id:'stk_'+Date.now(), bench:tb, text:txt, date:todayISO(), timestamp:Date.now(), time:new Date().toLocaleString('en-GB') });
     saveState(true); if (currentTab==='zones') loadZone(tz);
     return `Added **"${txt}"** to **Zone ${tz} · Bench ${tb}**.`;
@@ -2573,8 +2649,8 @@ let plStatusFilter = 'all';
 let plPageLimit = 50;
 let plEditingId = null;
 let plDraft = null;
-let plLastLoc = { zone: '9', bench: 'L', location: '' };
-let plStamp = { zone: '', bench: '', customBench: '', loc: '', customLoc: '', syncZones: false };
+let plLastLoc = { zone: '9', bench: '1L', location: '' };
+let plStamp = { zone: '', benchNum: '', bench: '', customBench: '', loc: '', customLoc: '', syncZones: false };
 
 function getActivePlantList() {
   if (!Array.isArray(appState.plantLists)) appState.plantLists = [];
@@ -2606,14 +2682,14 @@ function plZoneLabel(z) {
   if (!s) return '';
   return /^\d+$/.test(s) ? `Zone ${s}` : s;
 }
+function plMaxBenchForZone(z) {
+  const s = String(z || '').trim();
+  if (/^\d+$/.test(s)) return zoneDefs[parseInt(s, 10)]?.maxBench || 0;
+  return 0;
+}
 function plBenchOptionsForZone(z) {
   const s = String(z || '').trim();
-  if (/^\d+$/.test(s)) {
-    const zn = parseInt(s, 10);
-    const def = zoneDefs[zn]?.letters || [];
-    const active = zn >= 3 && zn <= 12 ? Array.from(activeBenchesMap(zn).keys()).filter(k => k !== 'GENERAL') : [];
-    return Array.from(new Set([...def, ...active])).sort(sortBench);
-  }
+  if (/^\d+$/.test(s)) return zoneDefs[parseInt(s, 10)]?.letters || [];
   return [];
 }
 function plFormatPlacement(p, includeQty = false) {
@@ -2633,10 +2709,11 @@ function plPlacementsText(it) {
   return ps.map(p => plFormatPlacement(p, multi)).filter(Boolean).join('; ');
 }
 function plStampHasTarget() {
-  return !!(plStamp.zone || plStamp.bench || plStamp.customBench || plStamp.loc || plStamp.customLoc);
+  return !!(plStamp.zone || plStamp.benchNum || plStamp.bench || plStamp.customBench || plStamp.loc || plStamp.customLoc);
 }
 function plStampCurrentPlacement(qty = 0) {
-  const bench = (plStamp.customBench || plStamp.bench || '').trim().toUpperCase();
+  const combined = joinBenchCode(plStamp.benchNum, plStamp.bench);
+  const bench = (plStamp.customBench || combined || '').trim().toUpperCase();
   const location = (plStamp.customLoc || plStamp.loc || '').trim();
   return { zone: plStamp.zone || '', bench, location, qty };
 }
@@ -2650,13 +2727,32 @@ function plStampShortLabel() {
 }
 function onPlStampZoneChange(z) {
   plStamp.zone = z;
+  const maxB = plMaxBenchForZone(z);
+  const nSel = document.getElementById('plStampNum');
+  if (nSel) {
+    if (maxB > 0) {
+      nSel.style.display = 'inline-block';
+      let h = `<option value="">Bench # (1–${maxB})</option>`;
+      for (let i = 1; i <= maxB; i++) h += `<option value="${i}">Bench ${i}</option>`;
+      nSel.innerHTML = h;
+      if (+plStamp.benchNum > maxB) plStamp.benchNum = '';
+      nSel.value = plStamp.benchNum;
+    } else {
+      nSel.style.display = 'none';
+      plStamp.benchNum = '';
+    }
+  }
   const bSel = document.getElementById('plStampBench');
-  const opts = plBenchOptionsForZone(z);
-  bSel.innerHTML = `<option value="">Bench...</option>` + opts.map(b => `<option value="${esc(b)}">Bench ${esc(b)}</option>`).join('');
-  if (opts.length && !opts.includes(plStamp.bench)) plStamp.bench = opts[0];
-  else if (!opts.length) plStamp.bench = '';
+  const sides = plBenchOptionsForZone(z);
+  const sideNames = { L: 'Left (L)', M: 'Middle (M)', R: 'Right (R)' };
+  bSel.innerHTML = `<option value="">Side...</option>` + sides.map(b => `<option value="${esc(b)}">${sideNames[b] || 'Bench ' + esc(b)}</option>`).join('');
+  if (sides.length && !sides.includes(plStamp.bench)) plStamp.bench = sides[0];
+  else if (!sides.length) plStamp.bench = '';
   bSel.value = plStamp.bench;
-  if (z) plLastLoc = { zone: z, bench: plStamp.customBench || plStamp.bench || '', location: plStamp.customLoc || plStamp.loc || '' };
+  if (z) {
+    const p = plStampCurrentPlacement();
+    plLastLoc = { zone: p.zone, bench: p.bench, location: p.location };
+  }
   renderPlantListItems();
 }
 function onPlStampLocChange(loc) {
@@ -2665,9 +2761,10 @@ function onPlStampLocChange(loc) {
   renderPlantListItems();
 }
 function clearPlStamp() {
-  plStamp = { zone: '', bench: '', customBench: '', loc: '', customLoc: '', syncZones: plStamp.syncZones };
+  plStamp = { zone: '', benchNum: '', bench: '', customBench: '', loc: '', customLoc: '', syncZones: plStamp.syncZones };
   const zEl = document.getElementById('plStampZone'); if (zEl) zEl.value = '';
-  const bEl = document.getElementById('plStampBench'); if (bEl) { bEl.innerHTML = '<option value="">Bench...</option><option value="L">Bench L</option><option value="R">Bench R</option>'; bEl.value = ''; }
+  const nEl = document.getElementById('plStampNum'); if (nEl) { nEl.style.display = 'none'; nEl.value = ''; }
+  const bEl = document.getElementById('plStampBench'); if (bEl) { bEl.innerHTML = '<option value="">Side...</option><option value="L">Left (L)</option><option value="R">Right (R)</option>'; bEl.value = ''; }
   const cbEl = document.getElementById('plStampCustomBench'); if (cbEl) cbEl.value = '';
   const lEl = document.getElementById('plStampLoc'); if (lEl) lEl.value = '';
   const clEl = document.getElementById('plStampCustomLoc'); if (clEl) clEl.value = '';
@@ -3247,7 +3344,7 @@ function renderPlantListItems() {
 
 /* QUICK ACTIONS & INLINE SMART EDITOR */
 function syncPlantItemToZoneTab(it) {
-  const ps = (it.placements || []).filter(p => p && /^\d+$/.test(String(p.zone || '')) && parseInt(p.zone, 10) >= 3);
+  const ps = (it.placements || []).filter(p => p && /^\d+$/.test(String(p.zone || '')) && parseInt(p.zone, 10) >= 1);
   if (!ps.length) return 0;
   const now = new Date().toLocaleString('en-GB'), d = todayISO();
   let added = 0;
@@ -3311,7 +3408,7 @@ function togglePlEditor(id) {
   plEditingId = id;
   const existing = (it.placements || []).map(p => ({ zone: p.zone || '', bench: p.bench || '', location: p.location || '', qty: +p.qty || 0 }));
   if (!existing.length) {
-    const def = plStampHasTarget() ? plStampCurrentPlacement(it.doneQty || it.target || 0) : { zone: plLastLoc.zone || '9', bench: plLastLoc.bench || 'L', location: plLastLoc.location || '', qty: it.doneQty || it.target || 0 };
+    const def = plStampHasTarget() ? plStampCurrentPlacement(it.doneQty || it.target || 0) : { zone: plLastLoc.zone || '9', bench: plLastLoc.bench || '1L', location: plLastLoc.location || '', qty: it.doneQty || it.target || 0 };
     existing.push(def);
   }
   plDraft = {
@@ -3330,20 +3427,28 @@ function renderPlEditorHtml(it) {
     .concat(PL_EXTRA_ZONES.map(z => ({ v: z, l: z })));
 
   const placementsHtml = d.placements.map((p, idx) => {
-    const bOpts = plBenchOptionsForZone(p.zone);
+    const sides = plBenchOptionsForZone(p.zone);
+    const maxB = plMaxBenchForZone(p.zone);
+    const sp = splitBenchCode(p.bench);
+    let numOpts = '';
+    if (maxB > 0) {
+      numOpts = `<option value="">Bench # (1–${maxB})</option>`;
+      for (let n = 1; n <= maxB; n++) numOpts += `<option value="${n}" ${sp.num===String(n)?'selected':''}>#${n}</option>`;
+    }
     return `<div class="pl-place-row">
       ${multi ? `<input type="number" min="0" value="${p.qty || ''}" placeholder="Qty" style="width:72px;" onchange="plEdUpdatePlacement(${idx},'qty',this.value)">` : ''}
       <select onchange="plEdUpdatePlacement(${idx},'zone',this.value)">
         <option value="">Zone / Area...</option>
         ${zoneOptions.map(o => `<option value="${esc(o.v)}" ${String(p.zone)===o.v?'selected':''}>${esc(o.l)}</option>`).join('')}
       </select>
-      ${bOpts.length ? `<div class="pl-mini-chips">${bOpts.map(b => `<button type="button" class="pl-mini-chip${p.bench===b?' active':''}" onclick="plEdUpdatePlacement(${idx},'bench','${esc(b)}')">${esc(b)}</button>`).join('')}</div>` : ''}
-      <input type="text" value="${esc(p.bench)}" placeholder="Bench (e.g. L, 4L)" style="width:110px; text-transform:uppercase;" onchange="plEdUpdatePlacement(${idx},'bench',this.value.trim().toUpperCase())">
+      ${maxB > 0 ? `<select onchange="plEdUpdatePlacement(${idx},'benchNum',this.value)">${numOpts}</select>` : ''}
+      ${sides.length ? `<div class="pl-mini-chips">${sides.map(s => `<button type="button" class="pl-mini-chip${sp.side===s?' active':''}" onclick="plEdUpdatePlacement(${idx},'benchSide','${esc(s)}')">${esc(s)}</button>`).join('')}</div>` : ''}
+      <input type="text" value="${esc(p.bench)}" placeholder="Bench (e.g. 14L)" style="width:94px; text-transform:uppercase;" onchange="plEdUpdatePlacement(${idx},'bench',normBench(parseInt(plDraft.placements[${idx}].zone,10)||9, this.value))">
       <select onchange="if(this.value) plEdUpdatePlacement(${idx},'location',this.value);">
         <option value="">Spot preset...</option>
         ${PL_LOC_PRESETS.map(loc => `<option value="${esc(loc)}" ${p.location===loc?'selected':''}>${esc(loc)}</option>`).join('')}
       </select>
-      <input type="text" value="${esc(p.location)}" placeholder="Location / Bay (e.g. Front, Bay 2)" style="flex:1; min-width:130px;" onchange="plEdUpdatePlacement(${idx},'location',this.value.trim())">
+      <input type="text" value="${esc(p.location)}" placeholder="Location / Bay (e.g. Front)" style="flex:1; min-width:120px;" onchange="plEdUpdatePlacement(${idx},'location',this.value.trim())">
       ${multi ? `<button type="button" class="icon-btn del" onclick="plEdRemovePlacement(${idx})" title="Remove bench">✕</button>` : ''}
     </div>`;
   }).join('');
@@ -3435,9 +3540,22 @@ function plEdUpdatePlacement(idx, field, val) {
     }
   } else if (field === 'zone') {
     p.zone = val;
-    const opts = plBenchOptionsForZone(val);
-    if (opts.length && !opts.includes(p.bench)) p.bench = opts[0];
-    else if (!opts.length && /^\d+$/.test(val) === false) p.bench = '';
+    const sides = plBenchOptionsForZone(val);
+    const maxB = plMaxBenchForZone(val);
+    const sp = splitBenchCode(p.bench);
+    const num = (maxB > 0 && sp.num && +sp.num <= maxB) ? sp.num : '';
+    const side = sides.includes(sp.side) ? sp.side : (sides[0] || '');
+    p.bench = sides.length ? joinBenchCode(num, side) : '';
+  } else if (field === 'benchNum') {
+    const sp = splitBenchCode(p.bench);
+    const sides = plBenchOptionsForZone(p.zone);
+    const side = sides.includes(sp.side) ? sp.side : (sides[0] || '');
+    p.bench = joinBenchCode(val, side);
+  } else if (field === 'benchSide') {
+    const sp = splitBenchCode(p.bench);
+    const maxB = plMaxBenchForZone(p.zone);
+    const num = maxB > 0 ? sp.num : '';
+    p.bench = joinBenchCode(num, val);
   } else {
     p[field] = val;
   }
@@ -3445,9 +3563,11 @@ function plEdUpdatePlacement(idx, field, val) {
 }
 function plEdAddPlacement() {
   if (!plDraft) return;
-  const first = plDraft.placements[0] || { zone: '9', bench: 'L', location: '' };
+  const first = plDraft.placements[0] || { zone: '9', bench: '1L', location: '' };
   if (plDraft.placements.length === 1 && !first.qty && plDraft.doneQty > 0) first.qty = plDraft.doneQty;
-  plDraft.placements.push({ zone: first.zone || '9', bench: first.bench === 'L' ? 'R' : 'L', location: '', qty: 0 });
+  const sp = splitBenchCode(first.bench);
+  const nextSide = sp.side === 'L' ? 'R' : 'L';
+  plDraft.placements.push({ zone: first.zone || '9', bench: joinBenchCode(sp.num, nextSide), location: '', qty: 0 });
   renderPlantListItems();
 }
 function plEdRemovePlacement(idx) {
@@ -3467,19 +3587,17 @@ function plEdVoiceFill(target) {
     const t = String(e.results[0][0].transcript || '').trim();
     if (!plDraft) return;
     const p = plDraft.placements[0] || (plDraft.placements[0] = { zone:'', bench:'', location:'', qty:0 });
-    const zm = t.match(/zone\s*(\d{1,2})/i);
-    if (zm) p.zone = String(Math.min(12, Math.max(1, parseInt(zm[1], 10))));
-    else {
-      const ez = PL_EXTRA_ZONES.find(x => t.toLowerCase().includes(x.toLowerCase()));
-      if (ez) p.zone = ez;
-    }
-    const bm = t.match(/bench\s+([a-z0-9]+)/i);
-    if (bm) p.bench = normBench(parseInt(p.zone,10) || 9, bm[1]) || bm[1].toUpperCase();
-    const loc = PL_LOC_PRESETS.find(x => t.toLowerCase().includes(x.toLowerCase()));
-    if (loc) p.location = loc;
+    const loc = extractLocationFromText(t);
+    if (loc.zone) p.zone = loc.zone;
+    if (loc.bench) p.bench = loc.bench;
+    if (loc.location) p.location = loc.location;
     if (/\b(all|full)\s+done\b/i.test(t) && target > 0) { plDraft.doneQty = target; plDraft.status = 'done'; }
     else {
-      const cleaned = t.replace(/zone\s*\d{1,2}/ig, '').replace(/bench\s+[a-z0-9]+/ig, '');
+      const cleaned = t
+        .replace(/\bzone\s*\d{1,2}\b/ig, '')
+        .replace(/\bbench\s+(?:\d{1,2}\s*(?:left|right|middle|mid|[lmr])|(?:left|right|middle|mid|[lmr])\s*\d{1,2}|[a-z0-9]+)\b/ig, '')
+        .replace(/\b\d{1,2}\s*(?:left|right|middle|mid|[lmr])\b/ig, '')
+        .replace(/\b(?:left|right|middle|mid)\s*\d{1,2}\b/ig, '');
       const nm = cleaned.match(/\b(\d+)\b/);
       if (nm) plEdSetQty(parseInt(nm[1], 10), target, false);
       else if (/\bdone\b/i.test(t)) { plDraft.status = 'done'; if (target > 0 && !plDraft.doneQty) plDraft.doneQty = target; }
