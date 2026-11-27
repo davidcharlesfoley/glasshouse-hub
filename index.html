@@ -481,6 +481,43 @@
   .live-chip { padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border-strong); background: #fff; color: var(--primary); font-size: 11.5px; font-weight: 700; cursor: pointer; }
   .live-chip:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   .ai-act-badge { margin-top: 6px; padding: 6px 9px; border-radius: 8px; background: #e8f8ee; border: 1px solid #a7e3bd; color: #15803d; font-size: 12px; font-weight: 700; }
+
+  /* Visual Zone Bench Map */
+  .bm-details { margin-bottom: 14px; background: var(--card-soft); border: 1px solid var(--border); border-radius: 13px; padding: 10px 12px; }
+  .bm-details > summary { list-style: none; cursor: pointer; font-weight: 700; font-size: 13.5px; color: var(--primary); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .bm-details > summary::-webkit-details-marker { display: none; }
+  .bm-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: var(--muted); margin: 9px 0 8px; }
+  .bm-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; vertical-align: middle; margin-right: 4px; }
+  .bm-cols { display: grid; gap: 10px; }
+  .bm-cols.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bm-cols.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 640px) { .bm-cols.cols-2, .bm-cols.cols-3 { grid-template-columns: 1fr; } }
+  .bm-col { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
+  .bm-col-head { font-size: 11.5px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .bm-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .bm-tile {
+    padding: 6px 3px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--card-soft); color: var(--ink-2); font-family: var(--font-mono);
+    font-size: 11.5px; font-weight: 700; cursor: pointer; position: relative; text-align: center;
+    transition: all 0.12s;
+  }
+  .bm-tile:hover { border-color: var(--primary); transform: translateY(-1px); }
+  .bm-tile.st-stock { background: #e8f8ee; border-color: #86efac; color: #15803d; }
+  .bm-tile.st-part { background: #fef3c7; border-color: #eab308; color: #854d0e; }
+  .bm-tile.selected { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .bm-tile.watered::after { content: ''; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+
+  /* Plant Lists Bulk Bar & Clickable Chips */
+  .pl-bulk-bar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 12px; border-radius: 11px; background: var(--primary-soft); border: 1px solid var(--accent-border);
+    margin-bottom: 10px;
+  }
+  .pl-chip.clickable { cursor: pointer; transition: all 0.12s; }
+  .pl-chip.clickable:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .pl-sel-chk { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; margin-top: 2px; }
+  .tag.plist-done { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .tag.plist-part { background: #fef08a; color: #854d0e; border: 1px solid #eab308; }
 </style>
 </head>
 <body>
@@ -505,6 +542,7 @@
     </div>
     <div class="row">
       <div id="syncBadge" class="status-pill local"><span class="status-dot"></span><span id="syncStatusText">Saved</span></div>
+      <button class="btn sm ghost" id="topUndoBtn" style="display:none;" onclick="undoLast()" title="Undo last change">↩ Undo</button>
       <button class="btn sm soft-blue" onclick="openScanModal()">📷 Scan Photo</button>
       <button class="btn sm primary" onclick="openSettings()">⚙ Settings</button>
     </div>
@@ -630,6 +668,21 @@
         </div>
       </div>
 
+      <!-- VISUAL ZONE BENCH MAP (1-25 L/R OR 1-15 L/M/R) -->
+      <details class="bm-details" id="benchMapDetails">
+        <summary>
+          <span>🗺️ Visual Bench Map — <span id="bmZoneLbl">Zone 9</span></span>
+          <span id="bmSummaryPill" class="tab-pill">0 active</span>
+        </summary>
+        <div class="bm-legend">
+          <span><span class="bm-dot" style="background:#e8f8ee;border:1px solid #86efac;"></span>Plants / Done</span>
+          <span><span class="bm-dot" style="background:#fef3c7;border:1px solid #eab308;"></span>In Progress</span>
+          <span><span class="bm-dot" style="background:var(--blue);border-radius:50%;"></span>Watered Today</span>
+          <span style="margin-left:auto;">Tap any bench to select it</span>
+        </div>
+        <div id="benchMapGrid"></div>
+      </details>
+
       <!-- ACTIVE BENCHES IN ZONE -->
       <div id="benchesToolbar" class="row" style="justify-content:space-between; margin-bottom:10px;">
         <div class="row" style="gap:7px;">
@@ -700,7 +753,12 @@
               Ask about your glasshouse or tell me what to log, e.g. <em>"Put Wallflowers on Zone 9 Bench L"</em> or <em>"What was watered today?"</em>
             </div>
           </div>
-          <textarea id="aiInput" placeholder="Ask a question or tell me what to put on a bench..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault(); askAI();}"></textarea>
+          <div class="row" style="gap:5px;">
+            <button type="button" class="live-chip" onclick="const el=document.getElementById('aiInput'); el.value='Add to production list:\\n'; el.focus();">📋 Raw → Production</button>
+            <button type="button" class="live-chip" onclick="const el=document.getElementById('aiInput'); el.value='What needs watering today?'; askAI();">💧 Needs watering?</button>
+            <button type="button" class="live-chip" onclick="const el=document.getElementById('aiInput'); el.value='List progress'; askAI();">📊 List progress</button>
+          </div>
+          <textarea id="aiInput" placeholder="Ask a question, paste raw plant data, or tell me what to log..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault(); askAI();}"></textarea>
           <div class="row">
             <button class="btn soft-blue" onclick="openScanModal()">📷 Scan Photo</button>
             <button class="btn" id="micAiBtn" onclick="toggleMic('aiInput','micAiBtn', askAI)">🎤 Talk</button>
@@ -720,8 +778,8 @@
           <h2>Production Counts</h2>
           <div class="row" style="gap:6px;">
             <button type="button" class="btn sm soft-blue" onclick="openAiRawImport('production')">✨ AI Raw Import</button>
-            <label class="btn sm primary" for="csvIn" style="cursor:pointer;">Upload CSV</label>
-            <input type="file" id="csvIn" accept=".csv,.txt" style="display:none;" onchange="importProdCSV(event)">
+            <label class="btn sm primary" for="csvIn" style="cursor:pointer;">📂 Upload Excel / CSV</label>
+            <input type="file" id="csvIn" accept=".xlsx,.csv,.txt" style="display:none;" onchange="importProdCSV(event)">
             <button class="btn sm" onclick="exportProdCSV()">Export CSV</button>
           </div>
         </div>
@@ -731,9 +789,19 @@
           <div class="kpi"><span class="lbl">Counted</span><span class="val" id="kActual" style="color:var(--accent);">0</span></div>
           <div class="kpi"><span class="lbl">Diff</span><span class="val" id="kDiff">0</span></div>
         </div>
+        <div class="row" style="margin-bottom:8px; gap:6px;">
+          <input type="text" id="prodSearch" placeholder="Search variety or bench..." style="flex:1; min-width:140px;" oninput="renderCounts()">
+          <select id="prodZoneFilter" onchange="renderCounts()">
+            <option value="ALL">All Zones</option>
+            <option value="12">Zone 12</option><option value="11">Zone 11</option><option value="10">Zone 10</option>
+            <option value="9">Zone 9</option><option value="8">Zone 8</option><option value="7">Zone 7</option>
+            <option value="6">Zone 6</option><option value="5">Zone 5</option><option value="4">Zone 4</option>
+            <option value="3">Zone 3</option><option value="2">Zone 2</option><option value="1">Zone 1</option>
+          </select>
+        </div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>Variety</th><th>Bench</th><th style="text-align:right;">Target</th><th style="text-align:right;">Counted</th><th></th></tr></thead>
+            <thead><tr><th>Status</th><th>Variety</th><th>Bench</th><th style="text-align:right;">Target</th><th style="text-align:right;">Counted</th><th></th></tr></thead>
             <tbody id="prodBody"></tbody>
           </table>
         </div>
@@ -780,6 +848,7 @@
           <div class="row">
             <input type="number" id="cExact" placeholder="Exact number..." style="flex:1;">
             <button class="btn green" onclick="setExactCount()">Set</button>
+            <button class="btn soft-green" onclick="hitProdTarget()" title="Set counted equal to target">✓ Hit Target</button>
           </div>
         </div>
       </div>
@@ -908,6 +977,9 @@
           <select id="plWeekFilter" onchange="plPageLimit=50; renderPlantListItems();" style="display:none;">
             <option value="ALL">All Plug Weeks</option>
           </select>
+          <select id="plSpecFilter" onchange="plPageLimit=50; renderPlantListItems();" style="display:none;">
+            <option value="ALL">All Pot Sizes</option>
+          </select>
           <select id="plZoneFilter" onchange="plPageLimit=50; renderPlantListItems();">
             <option value="ALL">All Locations</option>
             <option value="ASSIGNED">Has Bench / Location</option>
@@ -926,7 +998,20 @@
           <button type="button" class="filter-pill" id="plf_done" onclick="setPlStatusFilter('done')">✅ Done</button>
           <button type="button" class="filter-pill" id="plf_partial" onclick="setPlStatusFilter('partial')">🟡 In Progress</button>
           <button type="button" class="filter-pill" id="plf_todo" onclick="setPlStatusFilter('todo')">🟡 To Do</button>
+          <button type="button" class="filter-pill" id="plBulkToggleBtn" onclick="togglePlBulkMode()">☑ Bulk Select</button>
           <span id="plMatchInfo" style="margin-left:auto; font-size:12px; color:var(--muted); font-weight:600;"></span>
+        </div>
+
+        <div id="plBulkBar" class="pl-bulk-bar" style="display:none;">
+          <div class="row" style="gap:7px;">
+            <strong id="plBulkCount" style="font-size:13px; color:var(--primary);">0 selected</strong>
+            <button type="button" class="btn sm" onclick="plBulkSelectShown()">Select Shown</button>
+            <button type="button" class="btn sm ghost" onclick="plBulkClear()">Clear</button>
+          </div>
+          <div class="row" style="gap:6px;">
+            <button type="button" class="btn sm green" id="plBulkStampBtn" onclick="plBulkMarkDone()">✅ Mark Selected Done</button>
+            <button type="button" class="btn sm" onclick="plBulkReset()">🟡 Reset to To Do</button>
+          </div>
         </div>
 
         <div id="plItemsBody" class="pl-items"></div>
@@ -1095,6 +1180,7 @@
           <label class="btn" for="restoreIn" style="cursor:pointer;">Restore JSON</label>
           <input type="file" id="restoreIn" accept=".json" style="display:none;" onchange="restoreJSON(event)">
         </div>
+        <div id="storageUsageText" style="margin-top:8px; font-size:12px; color:var(--muted);"></div>
       </details>
     </div>
   </div>
@@ -1287,9 +1373,16 @@ let selectedProdId = appState.productionList[0]?.id || null;
 let undoStack = [];
 let editingKey = null;
 
+function updateUndoBtn() {
+  const b = document.getElementById('topUndoBtn');
+  if (!b) return;
+  b.style.display = undoStack.length ? 'inline-flex' : 'none';
+  if (undoStack.length) b.title = `Undo: ${undoStack[undoStack.length - 1].label}`;
+}
 function pushUndo(label) {
   undoStack.push({ label, snap: JSON.stringify(appState) });
   if (undoStack.length > 20) undoStack.shift();
+  updateUndoBtn();
 }
 function undoLast() {
   if (!undoStack.length) { toast('Nothing to undo'); return; }
@@ -1297,6 +1390,7 @@ function undoLast() {
   appState = JSON.parse(prev.snap);
   saveState(true);
   renderAll();
+  updateUndoBtn();
   toast('Undid: ' + prev.label);
 }
 function saveState(push = true) {
@@ -1356,11 +1450,21 @@ function activeBenchesMap(z) {
   const zd = appState.zones[z], map = new Map();
   const ensure = raw => {
     const c = String(raw || '').trim().toUpperCase() || 'GENERAL';
-    if (!map.has(c)) map.set(c, { code:c, mode:zd.benches?.[c] || 'flood', stocks:[], prods:[], waters:[] });
+    if (!map.has(c)) map.set(c, { code:c, mode:zd.benches?.[c] || 'flood', stocks:[], prods:[], listItems:[], waters:[] });
     return map.get(c);
   };
   (zd.stockLogs || []).forEach(s => ensure(s.bench).stocks.push(s));
   (appState.productionList || []).forEach(p => { if (+p.zone === z) ensure(p.bench).prods.push(p); });
+  const actList = typeof getActivePlantList === 'function' ? getActivePlantList() : null;
+  if (actList && Array.isArray(actList.items)) {
+    actList.items.forEach(it => {
+      (it.placements || []).forEach(pl => {
+        if (pl && String(pl.zone) === String(z)) {
+          ensure(pl.bench).listItems.push({ item: it, placement: pl });
+        }
+      });
+    });
+  }
   (zd.waterLogs || []).forEach(w => ensure(w.bench).waters.push(w));
   return map;
 }
@@ -1597,10 +1701,92 @@ function setZoneFilter(f) {
   renderBenches(currentZone);
 }
 
+function jumpToPlantListItem(id) {
+  switchTab('lists');
+  plEditingId = null; plDraft = null;
+  const list = getActivePlantList();
+  if (!list) return;
+  const idx = list.items.findIndex(x => x.id === id);
+  if (idx >= 0) {
+    plStatusFilter = 'all';
+    ['all','done','partial','todo'].forEach(k => document.getElementById('plf_'+k)?.classList.toggle('active', k === 'all'));
+    const sEl = document.getElementById('plSearch'); if (sEl) sEl.value = list.items[idx].name;
+    plPageLimit = 50;
+    renderPlantLists();
+    setTimeout(() => document.getElementById('pli_' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+  }
+}
+
+function selectBenchFromMap(code) {
+  if (entryMode === 'water') pickBench(code, 'water');
+  else pickBench(code, 'stock');
+  renderBenchMap(currentZone);
+  const card = document.getElementById('bcard_' + code.replace(/[^A-Z0-9]/gi, '_'));
+  if (card) {
+    card.classList.add('highlight');
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setTimeout(() => card.classList.remove('highlight'), 1400);
+  }
+}
+
+function renderBenchMap(z) {
+  const grid = document.getElementById('benchMapGrid');
+  if (!grid) return;
+  const def = zoneDefs[z], active = activeBenchesMap(z), t = todayISO();
+  const lblEl = document.getElementById('bmZoneLbl');
+  const pillEl = document.getElementById('bmSummaryPill');
+  if (lblEl) lblEl.textContent = def.maxBench ? `Zone ${z} (1–${def.maxBench} ${def.letters.join('/')})` : `Zone ${z} (${def.letters.join('/')})`;
+  const activeCount = Array.from(active.keys()).filter(k => k !== 'GENERAL').length;
+  if (pillEl) pillEl.textContent = `${activeCount} active`;
+
+  const sideNames = { L: 'Left (L)', M: 'Middle (M)', R: 'Right (R)' };
+  const selectedCode = entryMode === 'water' ? waterTarget : stockBench;
+
+  const tileFor = code => {
+    const b = active.get(code);
+    let cls = 'bm-tile';
+    let tip = `Bench ${code} — Empty`;
+    if (b) {
+      const hasStock = b.stocks.length + b.prods.length > 0;
+      const hasListDone = b.listItems.some(x => plEffectiveStatus(x.item) === 'done');
+      const hasListPart = b.listItems.some(x => plEffectiveStatus(x.item) !== 'done');
+      const watToday = b.waters.some(w => entryDate(w) === t);
+      if (hasListPart && !hasListDone && !hasStock) cls += ' st-part';
+      else if (hasStock || hasListDone || hasListPart) cls += ' st-stock';
+      if (watToday) cls += ' watered';
+      const totalItems = b.stocks.length + b.prods.length + b.listItems.length;
+      tip = `Bench ${code}: ${totalItems} item${totalItems===1?'':'s'}${watToday ? ' · Watered today' : ''}`;
+    }
+    if (selectedCode === code) cls += ' selected';
+    return `<button type="button" class="${cls}" title="${esc(tip)}" onclick="selectBenchFromMap('${esc(code)}')">${esc(code)}</button>`;
+  };
+
+  if (def.maxBench === 0) {
+    grid.innerHTML = `<div class="bm-cols cols-2">${def.letters.map(s => `<div class="bm-col"><div class="bm-col-head"><span>${sideNames[s]}</span></div><div class="bm-grid" style="grid-template-columns:1fr;">${tileFor(s)}</div></div>`).join('')}</div>`;
+    return;
+  }
+
+  const colCls = def.letters.length === 3 ? 'cols-3' : 'cols-2';
+  grid.innerHTML = `<div class="bm-cols ${colCls}">${def.letters.map(side => {
+    let tiles = '';
+    let usedInSide = 0;
+    for (let n = 1; n <= def.maxBench; n++) {
+      const c = `${n}${side}`;
+      if (active.has(c)) usedInSide++;
+      tiles += tileFor(c);
+    }
+    return `<div class="bm-col">
+      <div class="bm-col-head"><span>${sideNames[side]}</span><span>${usedInSide}/${def.maxBench}</span></div>
+      <div class="bm-grid">${tiles}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
 function renderBenches(z) {
   const active = activeBenchesMap(z), def = zoneDefs[z], t = todayISO();
+  renderBenchMap(z);
   const list = Array.from(active.values()).sort((a,b) => sortBench(a.code, b.code));
-  const filtered = list.filter(b => zoneFilter === 'stock' ? (b.stocks.length+b.prods.length>0) : zoneFilter === 'water' ? b.waters.length>0 : true);
+  const filtered = list.filter(b => zoneFilter === 'stock' ? (b.stocks.length+b.prods.length+b.listItems.length>0) : zoneFilter === 'water' ? b.waters.length>0 : true);
   const watToday = list.filter(b => b.waters.some(w => entryDate(w) === t)).length;
   document.getElementById('zoneSummary').textContent = list.length ? `${list.length} bench${list.length===1?'':'es'}${watToday?` · ${watToday} watered today`:''}` : 'Empty zone';
   document.getElementById('benchesHeading').textContent = `Benches in Zone ${z}`;
@@ -1608,7 +1794,7 @@ function renderBenches(z) {
 
   const box = document.getElementById('zoneContent');
   if (!filtered.length) {
-    box.innerHTML = `<div class="empty-box"><strong>Zone ${z} has no benches logged yet</strong><p>Tap Bench ${def.letters.join(' or ')} above and describe what's on it.</p></div>`;
+    box.innerHTML = `<div class="empty-box"><strong>Zone ${z} has no benches logged yet</strong><p>Pick a bench above (or tap one on the Visual Bench Map) and describe what's on it — or stamp plants here from <strong>Plant Lists</strong>.</p></div>`;
     return;
   }
   box.innerHTML = `<div class="benches-grid">${filtered.map(b => {
@@ -1616,6 +1802,13 @@ function renderBenches(z) {
     const ws = b.waters.slice().sort((x,y) => (entryDate(y)||'').localeCompare(entryDate(x)||''));
     const lw = ws[0], isToday = lw && entryDate(lw) === t;
     let rows = '';
+    b.listItems.forEach(({ item, placement }) => {
+      const st = plEffectiveStatus(item);
+      const isDone = st === 'done';
+      const pct = item.target > 0 ? Math.min(100, Math.round(((item.doneQty||0)/item.target)*100)) : 0;
+      const qtyLbl = (item.placements?.length > 1 && placement.qty > 0) ? `${placement.qty} here (${item.doneQty}/${item.target})` : `${item.doneQty||0} / ${item.target}`;
+      rows += `<div class="item-row"><div style="flex:1;min-width:0;"><div><span class="tag ${isDone?'plist-done':'plist-part'}">${isDone?'✅ List':'🟡 List'}</span><strong>${esc(item.name)}</strong>${item.spec?` <span style="font-size:11.5px;color:var(--muted);">(${esc(item.spec)})</span>`:''}</div><div class="item-meta"><span>${placement.location?'📍 '+esc(placement.location):esc(fmtDate(item.updatedDate))}</span><span class="mono" style="color:${isDone?'#15803d':'#a16207'};font-weight:700;">${esc(qtyLbl)}</span></div>${item.target?`<div class="prog"><span style="width:${pct}%;background:${isDone?'#16a34a':'#eab308'};"></span></div>`:''}</div><button class="icon-btn" onclick="jumpToPlantListItem('${esc(item.id)}')" title="Open in Plant Lists">↗</button></div>`;
+    });
     b.prods.forEach(p => {
       const pct = p.target > 0 ? Math.min(100, Math.round((p.actual/p.target)*100)) : 0;
       if (editingKey === 'p:'+p.id) {
@@ -1632,7 +1825,7 @@ function renderBenches(z) {
       }
     });
     if (!rows) rows = `<div style="font-size:12.5px;color:var(--muted);">Watered — no crop description yet.</div>`;
-    return `<article class="bench-card">
+    return `<article class="bench-card" id="bcard_${esc(b.code.replace(/[^A-Z0-9]/gi,'_'))}">
       <div class="bench-head">
         <div class="row" style="gap:6px;">
           <span class="bench-title">${esc(lbl)}</span>
@@ -1679,6 +1872,23 @@ function collectAll(zF = 'ALL', q = '', dMode = 'ALL') {
     (appState.zones[z].stockLogs||[]).forEach(s => out.push({ type:'stock', date:entryDate(s), zone:z, bench:s.bench||'', text:s.text }));
     (appState.zones[z].waterLogs||[]).forEach(w => out.push({ type:'water', date:entryDate(w), zone:z, bench:w.bench||'', text:methodLabel(normMethod(w.method)) + (w.note ? ' — ' + w.note : '') }));
   }
+  const actList = typeof getActivePlantList === 'function' ? getActivePlantList() : null;
+  if (actList && Array.isArray(actList.items)) {
+    actList.items.forEach(it => {
+      if (!it.updatedDate && plEffectiveStatus(it) === 'todo' && !(it.placements||[]).length) return;
+      const st = plEffectiveStatus(it);
+      const firstP = (it.placements || [])[0] || {};
+      const zNum = /^\d+$/.test(String(firstP.zone||'')) ? parseInt(firstP.zone, 10) : 0;
+      const locTxt = plPlacementsText(it);
+      out.push({
+        type: st === 'done' ? 'plist-done' : 'plist-part',
+        date: it.updatedDate || todayISO(),
+        zone: zNum,
+        bench: firstP.bench || '',
+        text: `${it.name} — ${it.doneQty||0}/${it.target}${locTxt ? ' · ' + locTxt : ''}`
+      });
+    });
+  }
   return out.filter(e => {
     if (zF !== 'ALL' && String(e.zone) !== String(zF)) return false;
     if (dMode === 'TODAY' && e.date !== t) return false;
@@ -1690,6 +1900,14 @@ function collectAll(zF = 'ALL', q = '', dMode = 'ALL') {
 function setDateMode(m) {
   dateMode = m; ['ALL','TODAY','LAST7'].forEach(k => document.getElementById('dp_'+k).classList.toggle('active', k===m)); renderLogs();
 }
+function logTagLabel(t) {
+  if (t === 'water') return 'Watered';
+  if (t === 'prod') return 'Trays';
+  if (t === 'note') return 'Note';
+  if (t === 'plist-done') return '✅ List';
+  if (t === 'plist-part') return '🟡 List';
+  return 'Bench';
+}
 function renderLogs() {
   const list = collectAll(document.getElementById('logZoneFilter').value, document.getElementById('logSearch').value, dateMode);
   const box = document.getElementById('logsBody');
@@ -1699,32 +1917,46 @@ function renderLogs() {
   box.innerHTML = Array.from(byD.entries()).map(([d, items]) => `
     <div class="date-card">
       <div class="date-head"><span>${esc(fmtDate(d))}</span><span style="color:var(--muted);font-weight:500;">${items.length}</span></div>
-      <div class="date-body">${items.map(it => `<div class="date-row"><div><span class="tag ${it.type}">${it.type==='water'?'Watered':it.type==='prod'?'Trays':'Bench'}</span><strong>Z${it.zone}${it.bench?' · Bench '+esc(it.bench):''}</strong> — ${esc(it.text)}</div></div>`).join('')}</div>
+      <div class="date-body">${items.map(it => `<div class="date-row"><div><span class="tag ${it.type}">${logTagLabel(it.type)}</span><strong>${it.zone ? 'Z'+it.zone : 'List'}${it.bench?' · Bench '+esc(it.bench):''}</strong> — ${esc(it.text)}</div></div>`).join('')}</div>
     </div>`).join('');
 }
 function copyBenchLog() {
   const txt = collectAll(document.getElementById('logZoneFilter').value, document.getElementById('logSearch').value, dateMode)
-    .map(e => `${e.date} | Zone ${e.zone} ${e.bench?'Bench '+e.bench:''} | ${e.text}`).join('\n');
+    .map(e => `${e.date} | ${e.zone ? 'Zone '+e.zone : 'List'} ${e.bench?'Bench '+e.bench:''} | ${e.text}`).join('\n');
   navigator.clipboard?.writeText(txt).then(() => toast('Log copied!')).catch(() => toast('Copy ready'));
 }
 
 /* TAB 3: COUNTS */
 function renderCounts() {
-  const list = appState.productionList || [];
+  const all = appState.productionList || [];
+  const q = (document.getElementById('prodSearch')?.value || '').toLowerCase().trim();
+  const zf = document.getElementById('prodZoneFilter')?.value || 'ALL';
+  const list = all.filter(p => {
+    if (zf !== 'ALL' && String(p.zone) !== zf) return false;
+    if (q && !`${p.variety} z${p.zone} zone ${p.zone} bench ${p.bench||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
   let tgt = 0, act = 0; list.forEach(p => { tgt += +p.target||0; act += +p.actual||0; });
   document.getElementById('kLines').textContent = list.length;
   document.getElementById('kTarget').textContent = tgt;
   document.getElementById('kActual').textContent = act;
   document.getElementById('kDiff').textContent = (act-tgt>=0?'+':'') + (act-tgt);
-  if (!selectedProdId && list[0]) selectedProdId = list[0].id;
-  document.getElementById('prodBody').innerHTML = list.length ? list.map(p => `
-    <tr class="${p.id===selectedProdId?'sel':''}" onclick="selectedProdId='${p.id}';renderCounts();">
+  if ((!selectedProdId || !all.some(p => p.id === selectedProdId)) && list[0]) selectedProdId = list[0].id;
+  document.getElementById('prodBody').innerHTML = list.length ? list.map(p => {
+    const done = (+p.target > 0 && +p.actual >= +p.target);
+    const part = (!done && +p.actual > 0);
+    const stHtml = done
+      ? `<span class="pl-ico tick" title="Target met">✓</span>`
+      : (part ? `<span class="pl-ico circle" title="In progress"></span>` : `<span class="pl-ico circle-soft" title="To do"></span>`);
+    return `<tr class="${p.id===selectedProdId?'sel':''}" onclick="selectedProdId='${p.id}';renderCounts();">
+      <td style="width:34px;text-align:center;">${stHtml}</td>
       <td>${esc(p.variety)}</td><td><strong>Z${p.zone}</strong> ${p.bench?'· '+esc(p.bench):''}</td>
       <td class="mono" style="text-align:right;">${p.target}</td>
-      <td class="mono" style="text-align:right;color:var(--accent);font-weight:700;">${p.actual}</td>
+      <td class="mono" style="text-align:right;color:${done?'#15803d':'var(--accent)'};font-weight:700;">${p.actual}</td>
       <td><button class="icon-btn del" onclick="event.stopPropagation();delProd('${p.id}')">✕</button></td>
-    </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px;">No lines yet.</td></tr>`;
-  const cur = list.find(p => p.id === selectedProdId) || list[0];
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:18px;">No matching lines.</td></tr>`;
+  const cur = all.find(p => p.id === selectedProdId) || list[0];
   document.getElementById('cBadge').textContent = cur ? `Zone ${cur.zone} · Bench ${cur.bench||'General'}` : 'No item';
   document.getElementById('cTitle').textContent = cur ? cur.variety : 'Add a line';
   document.getElementById('cTarget').textContent = cur ? `${cur.target} trays` : '0';
@@ -1733,30 +1965,54 @@ function renderCounts() {
 function stepProd(d) { const l = appState.productionList; if (!l.length) return; const i = l.findIndex(p=>p.id===selectedProdId); selectedProdId = l[(i+d+l.length)%l.length].id; renderCounts(); }
 function adjCount(d) { const it = appState.productionList.find(p=>p.id===selectedProdId); if (!it) return; it.actual = Math.max(0, (+it.actual||0)+d); saveState(true); renderCounts(); }
 function setExactCount() { const it = appState.productionList.find(p=>p.id===selectedProdId), v = parseInt(document.getElementById('cExact').value,10); if (!it || isNaN(v)) return; it.actual = Math.max(0, v); document.getElementById('cExact').value=''; saveState(true); renderCounts(); }
+function hitProdTarget() { const it = appState.productionList.find(p=>p.id===selectedProdId); if (!it) return; pushUndo(`hit target ${it.variety}`); it.actual = Math.max(0, +it.target||0); saveState(true); renderCounts(); toast(`✅ ${it.variety}: ${it.actual}/${it.target}`); }
 function addProd() {
   const v = document.getElementById('npVar').value.trim(); if (!v) return;
   const z = +document.getElementById('npZone').value || 9, b = normBench(z, document.getElementById('npBench').value), t = +document.getElementById('npTarget').value || 0;
+  pushUndo(`add ${v}`);
   const item = { id:'prd_'+Date.now(), variety:v, zone:z, bench:b, target:t, actual:0, date:todayISO(), timestamp:Date.now(), updatedAt:new Date().toLocaleString('en-GB') };
   appState.productionList.unshift(item); selectedProdId = item.id;
   document.getElementById('npVar').value=''; document.getElementById('npBench').value=''; document.getElementById('npTarget').value='';
   saveState(true); renderCounts();
 }
-function importProdCSV(ev) {
-  const f = ev.target.files[0]; if (!f) return;
-  const r = new FileReader(); r.onload = e => {
-    const lines = e.target.result.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-    const start = /variety|crop|plant/i.test(lines[0]||'') ? 1 : 0;
-    for (let i = start; i < lines.length; i++) {
-      const c = lines[i].split(',').map(x=>x.replace(/^"|"$/g,'').trim()); if (!c[0]) continue;
-      const z = Math.min(12, Math.max(1, parseInt((c[1]||'9').replace(/\D/g,''),10)||9));
-      appState.productionList.unshift({ id:'csv_'+Date.now()+'_'+i, variety:c[0], zone:z, bench:normBench(z,c[2]||''), target:+c[3]||0, actual:+c[4]||0, date:todayISO(), timestamp:Date.now() });
+async function importProdCSV(ev) {
+  const f = ev.target.files?.[0]; if (!f) return;
+  try {
+    let rows = [];
+    if (/\.xlsx$/i.test(f.name)) {
+      rows = await parseXlsxFileToRows(await f.arrayBuffer());
+    } else {
+      rows = parseDelimitedTextToRows(await f.text());
     }
-    saveState(true); renderCounts(); toast('CSV imported');
-  }; r.readAsText(f); ev.target.value='';
+    const parsed = parsePlantRowsToItems(rows, f.name);
+    if (parsed.items.length && rows[0]?.length >= 4 && /plant\s*code|spec\s*code|min\s*quantity/i.test(rows.slice(0,5).flat().join(' '))) {
+      pushUndo(`import ${parsed.items.length} Excel rows to Counts`);
+      const ts = Date.now(), d = todayISO(), now = new Date().toLocaleString('en-GB');
+      parsed.items.slice().reverse().forEach((it, i) => {
+        const p = (it.placements || [])[0] || {};
+        const z = /^\d+$/.test(String(p.zone||'')) ? parseInt(p.zone, 10) : currentZone;
+        const b = p.bench || 'L';
+        appState.productionList.unshift({ id:'xlsx_'+(ts+i), variety: it.spec ? `${it.name} (${it.spec})` : it.name, zone:z, bench:b, target:it.target||0, actual:it.doneQty||0, date:d, updatedAt:now, timestamp:ts+i });
+      });
+      saveState(true); renderCounts(); toast(`Imported ${parsed.items.length} lines from Excel!`);
+      ev.target.value = ''; return;
+    }
+    const start = /variety|crop|plant/i.test((rows[0]||[]).join(' ')) ? 1 : 0;
+    let added = 0;
+    pushUndo('import CSV to Counts');
+    for (let i = start; i < rows.length; i++) {
+      const c = rows[i]; if (!c || !c[0]) continue;
+      const z = Math.min(12, Math.max(1, parseInt((c[1]||String(currentZone)).replace(/\D/g,''),10)||currentZone));
+      appState.productionList.unshift({ id:'csv_'+Date.now()+'_'+i, variety:c[0], zone:z, bench:normBench(z,c[2]||''), target:parseQtyNum(c[3]), actual:parseQtyNum(c[4]), date:todayISO(), timestamp:Date.now() });
+      added++;
+    }
+    saveState(true); renderCounts(); toast(`Imported ${added} lines`);
+  } catch (err) { toast('Could not import file: ' + (err.message || 'invalid format')); }
+  ev.target.value = '';
 }
 function exportProdCSV() { dlCSV([['Variety','Zone','Bench','Target','Counted','Date'], ...appState.productionList.map(p=>[p.variety,p.zone,p.bench,p.target,p.actual,entryDate(p)])], `counts_${todayISO()}.csv`); }
 
-/* TAB 4: WEEKLY REVIEW */
+/* TAB 5: WEEKLY REVIEW */
 function weekBounds(off = 0) {
   const now = new Date(), dow = now.getDay(), diff = dow === 0 ? -6 : 1 - dow;
   const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff + off*7);
@@ -1771,7 +2027,7 @@ function renderWeekly() {
   const all = collectAll('ALL','','ALL').filter(e => e.date >= b.start && e.date <= b.end);
   const obs = (appState.observations||[]).filter(o => { const d = entryDate(o); return d >= b.start && d <= b.end; });
   const wCount = all.filter(x=>x.type==='water').length, sCount = all.filter(x=>x.type!=='water').length;
-  const zSet = Array.from(new Set([...all.map(x=>x.zone), ...obs.map(x=>+x.zone)])).sort((a,b)=>a-b);
+  const zSet = Array.from(new Set([...all.map(x=>x.zone).filter(z=>z>0), ...obs.map(x=>+x.zone)])).sort((a,b)=>a-b);
   document.getElementById('wkW').textContent = wCount;
   document.getElementById('wkS').textContent = sCount;
   document.getElementById('wkO').textContent = obs.length;
@@ -1795,7 +2051,7 @@ function renderWeekly() {
   box.innerHTML = Array.from(byD.entries()).map(([d, items]) => `
     <div class="date-card">
       <div class="date-head"><span>${esc(fmtDate(d))}</span><span>${items.length}</span></div>
-      <div class="date-body">${items.map(it => `<div class="date-row"><div><span class="tag ${it.type}">${it.type==='water'?'Watered':it.type==='prod'?'Trays':it.type==='note'?'Note':'Bench'}</span><strong>Z${it.zone}${it.bench?' · Bench '+esc(it.bench):''}</strong> — ${esc(it.text)}</div></div>`).join('')}</div>
+      <div class="date-body">${items.map(it => `<div class="date-row"><div><span class="tag ${it.type}">${logTagLabel(it.type)}</span><strong>${it.zone ? 'Z'+it.zone : 'List'}${it.bench?' · Bench '+esc(it.bench):''}</strong> — ${esc(it.text)}</div></div>`).join('')}</div>
     </div>`).join('');
 }
 function copyWeekly() {
@@ -2167,14 +2423,15 @@ function quickPlantListCommand(q) {
     }
   }
 
-  // 5. Direct Update / Mark Done / Set Count & Bench on active Plant List
-  const isUpdateVerb = /\b(mark|done|finished|complete|completed|potted|tick|reset|to\s*do|todo|move|place|put|set|update)\b/i.test(ql);
+  // 5. Direct Update / Increment (+ more) / Move / Mark Done / Set Count & Bench on active Plant List
+  const isIncrement = /\b(add\s+\d+\s+more|plus\s+\d+|\+\s*\d+|\d+\s+more)\b/i.test(ql);
+  const isUpdateVerb = isIncrement || /\b(mark|done|finished|complete|completed|potted|tick|reset|to\s*do|todo|move|place|put|set|update)\b/i.test(ql);
   if (isUpdateVerb && !/\bwater(ed|ing)?\b/i.test(ql)) {
     const hits = findPlantListMatches(q, list);
     if (hits.length) {
       const it = hits[0];
       const loc = extractLocationFromText(q);
-      const isReset = /\b(reset|undo|not\s+done|to\s*do|todo)\b/i.test(ql);
+      const isReset = /\b(reset|not\s+done|to\s*do|todo)\b/i.test(ql);
       const cleanedForQty = q
         .replace(/\bzone\s*\d{1,2}\b/ig, '')
         .replace(/\bz\d{1,2}\b/ig, '')
@@ -2191,6 +2448,9 @@ function quickPlantListCommand(q) {
       if (isReset) {
         it.status = 'todo';
         it.doneQty = 0;
+      } else if (isIncrement && qtyNum !== null) {
+        it.doneQty = (+it.doneQty || 0) + qtyNum;
+        it.status = (it.target > 0 && it.doneQty >= it.target) ? 'done' : (it.doneQty > 0 ? 'partial' : 'todo');
       } else if (qtyNum !== null) {
         it.doneQty = qtyNum;
         it.status = (it.target > 0 && qtyNum >= it.target) ? 'done' : (qtyNum > 0 ? 'partial' : 'todo');
@@ -2203,7 +2463,7 @@ function quickPlantListCommand(q) {
         const nextP = {
           zone: loc.zone || prev.zone || '',
           bench: loc.bench || (loc.zone && loc.zone !== prev.zone ? (plBenchOptionsForZone(loc.zone)[0] || '') : (prev.bench || '')),
-          location: loc.location || prev.location || '',
+          location: loc.location || (loc.zone && loc.zone !== prev.zone ? '' : (prev.location || '')),
           qty: it.doneQty || it.target || 0
         };
         it.placements = [nextP];
@@ -2212,6 +2472,7 @@ function quickPlantListCommand(q) {
       it.updatedDate = todayISO();
       saveState(true);
       renderPlantLists();
+      if (currentTab === 'zones') loadZone(currentZone);
       const st = plEffectiveStatus(it);
       const ico = st === 'done' ? '✅ Done' : (st === 'partial' ? '🟡 In Progress' : '🟡 To Do');
       const locTxt = plPlacementsText(it);
@@ -2222,6 +2483,30 @@ function quickPlantListCommand(q) {
 }
 
 function quickLocalCommand(q) {
+  const ql = q.toLowerCase().trim();
+  // Voice/chat Undo
+  if (/^(undo|undo\s+last(\s+change|\s+action)?)$/i.test(ql)) {
+    if (!undoStack.length) return 'Nothing to undo right now.';
+    const lbl = undoStack[undoStack.length - 1].label;
+    undoLast();
+    return `Undid: **${lbl}**.`;
+  }
+  // What needs watering today?
+  if (/\b(needs?\s+water(ing)?|not\s+watered(\s+today)?|unwatered|what\s+to\s+water)\b/i.test(ql)) {
+    const t = todayISO(), need = [];
+    for (let z = 1; z <= 12; z++) {
+      const active = activeBenchesMap(z);
+      active.forEach(b => {
+        if (b.code === 'GENERAL') return;
+        const hasCrops = b.stocks.length + b.prods.length + b.listItems.length > 0;
+        const watToday = b.waters.some(w => entryDate(w) === t);
+        if (hasCrops && !watToday) need.push(`Z${z}·${b.code}`);
+      });
+    }
+    if (!need.length) return 'All stocked benches have already been watered today!';
+    return `**${need.length}** stocked bench${need.length===1?'':'es'} not watered today: **${need.slice(0, 14).join(', ')}**${need.length > 14 ? ` (+${need.length - 14} more)` : ''}.`;
+  }
+
   const plAct = quickPlantListCommand(q);
   if (plAct) return plAct;
   const loc = extractLocationFromText(q);
@@ -2231,6 +2516,7 @@ function quickLocalCommand(q) {
   if (/water(ed|ing)?/i.test(q) && (zm || b)) {
     const m = /top|lance/i.test(q) ? 'top' : /spot/i.test(q) ? 'spot' : 'bottom';
     const target = b || 'L';
+    pushUndo(`water Zone ${z} ${target}`);
     appState.zones[z].waterLogs.unshift({ id:'wat_'+Date.now(), bench:target, date:todayISO(), method:m, note:'', timestamp:Date.now(), time:new Date().toLocaleString('en-GB') });
     saveState(true); if (currentTab==='zones') loadZone(z);
     return `Logged **${methodLabel(m)}** watering for **Zone ${z}${target?' · Bench '+target:''}** today.`;
@@ -2238,6 +2524,7 @@ function quickLocalCommand(q) {
   const putM = q.match(/(?:put|add|log|set)\s+(.+?)\s+(?:on|in|to)\s+zone\s*(\d{1,2})(?:\s+(?:bench\s+)?(.+))?/i);
   if (putM) {
     const txt = putM[1].trim(), tz = Math.min(12, Math.max(1, +putM[2])), tb = b || normBench(tz, putM[3] || 'L') || 'L';
+    pushUndo(`add to Zone ${tz} ${tb}`);
     appState.zones[tz].stockLogs.unshift({ id:'stk_'+Date.now(), bench:tb, text:txt, date:todayISO(), timestamp:Date.now(), time:new Date().toLocaleString('en-GB') });
     saveState(true); if (currentTab==='zones') loadZone(tz);
     return `Added **"${txt}"** to **Zone ${tz} · Bench ${tb}**.`;
@@ -2883,6 +3170,12 @@ function openSettings() {
   if (ms) ms.value = appConfig.geminiModel || 'gemini-3.8-flash';
   document.getElementById('fbUrlIn').value = appConfig.firebaseUrl || '';
   document.getElementById('keyTestBox').style.display = 'none';
+  const su = document.getElementById('storageUsageText');
+  if (su) {
+    const kb = Math.round((JSON.stringify(appState).length / 1024) * 10) / 10;
+    const listsCnt = (appState.plantLists || []).length;
+    su.textContent = `Local data: ${kb} KB saved · ${listsCnt} plant list${listsCnt===1?'':'s'} · ${(appState.productionList||[]).length} production lines`;
+  }
   updateKeyUI();
   document.getElementById('settingsModal').classList.add('open');
 }
@@ -3460,16 +3753,100 @@ function setPlStatusFilter(f) {
   ['all','done','partial','todo'].forEach(k => document.getElementById('plf_'+k)?.classList.toggle('active', k === f));
   renderPlantListItems();
 }
+let plBulkMode = false;
+let plSelectedIds = new Set();
+
+function extractPotSize(spec) {
+  const s = String(spec || '').trim();
+  if (!s) return '';
+  const m = s.match(/\b(FP\d+(?:\/\d+L)?|\d+(?:\.\d+)?L|\d+CM)\b/i);
+  return m ? m[1].toUpperCase() : '';
+}
+function togglePlBulkMode(force) {
+  plBulkMode = typeof force === 'boolean' ? force : !plBulkMode;
+  if (!plBulkMode) plSelectedIds.clear();
+  document.getElementById('plBulkToggleBtn')?.classList.toggle('active', plBulkMode);
+  renderPlantListItems();
+}
+function togglePlSelect(id) {
+  if (plSelectedIds.has(id)) plSelectedIds.delete(id);
+  else plSelectedIds.add(id);
+  renderPlantListItems();
+}
+function plBulkSelectShown() {
+  const list = getActivePlantList(); if (!list) return;
+  const shown = getFilteredPlantItems(list).slice(0, plPageLimit);
+  shown.forEach(it => plSelectedIds.add(it.id));
+  renderPlantListItems();
+}
+function plBulkClear() {
+  plSelectedIds.clear();
+  renderPlantListItems();
+}
+function plBulkMarkDone() {
+  const list = getActivePlantList(); if (!list || !plSelectedIds.size) { toast('Select at least 1 line first'); return; }
+  const ids = Array.from(plSelectedIds);
+  const stampActive = plStampHasTarget();
+  pushUndo(`bulk mark ${ids.length} lines done`);
+  const d = todayISO();
+  let n = 0;
+  ids.forEach(id => {
+    const it = list.items.find(x => x.id === id); if (!it) return;
+    it.status = 'done';
+    if (it.target > 0 && (!it.doneQty || it.doneQty < it.target)) it.doneQty = it.target;
+    it.updatedDate = d;
+    if (stampActive) {
+      const p = plStampCurrentPlacement(it.doneQty || it.target || 0);
+      it.placements = [p];
+      if (plStamp.syncZones) syncPlantItemToZoneTab(it);
+    }
+    n++;
+  });
+  plSelectedIds.clear();
+  saveState(true);
+  renderAll();
+  toast(stampActive ? `✅ Stamped ${n} lines → ${plStampShortLabel()}` : `✅ Marked ${n} lines done`);
+}
+function plBulkReset() {
+  const list = getActivePlantList(); if (!list || !plSelectedIds.size) { toast('Select at least 1 line first'); return; }
+  const ids = Array.from(plSelectedIds);
+  pushUndo(`bulk reset ${ids.length} lines`);
+  ids.forEach(id => {
+    const it = list.items.find(x => x.id === id); if (!it) return;
+    it.status = 'todo'; it.doneQty = 0; it.placements = []; it.updatedDate = '';
+  });
+  plSelectedIds.clear();
+  saveState(true);
+  renderAll();
+  toast(`Reset ${ids.length} lines to To Do`);
+}
+function plQuickFilterChip(kind, val) {
+  plPageLimit = 50;
+  if (kind === 'wk') {
+    const el = document.getElementById('plWeekFilter');
+    if (el) { el.value = el.value === val ? 'ALL' : val; }
+  } else if (kind === 'spec') {
+    const el = document.getElementById('plSpecFilter');
+    if (el && val) { el.value = el.value === val ? 'ALL' : val; }
+  } else if (kind === 'search') {
+    const el = document.getElementById('plSearch');
+    if (el) { el.value = el.value.toLowerCase() === val.toLowerCase() ? '' : val; }
+  }
+  renderPlantListItems();
+}
+
 function getFilteredPlantItems(list) {
   if (!list) return [];
   const q = (document.getElementById('plSearch')?.value || '').toLowerCase().trim();
   const wk = document.getElementById('plWeekFilter')?.value || 'ALL';
+  const sp = document.getElementById('plSpecFilter')?.value || 'ALL';
   const zf = document.getElementById('plZoneFilter')?.value || 'ALL';
   const sort = document.getElementById('plSortSel')?.value || 'orig';
   let out = list.items.filter(it => {
     const st = plEffectiveStatus(it);
     if (plStatusFilter !== 'all' && st !== plStatusFilter) return false;
     if (wk !== 'ALL' && String(it.plugWeek || '') !== wk) return false;
+    if (sp !== 'ALL' && extractPotSize(it.spec) !== sp) return false;
     const hasLoc = (it.placements || []).some(p => p && (p.zone || p.bench || p.location));
     if (zf === 'ASSIGNED' && !hasLoc) return false;
     if (zf === 'UNASSIGNED' && hasLoc) return false;
@@ -3524,6 +3901,20 @@ function renderPlantLists() {
     wkSel.style.display = 'none'; wkSel.value = 'ALL';
   }
 
+  // Populate dynamic Pot Size / Spec filter
+  const specs = Array.from(new Set(list.items.map(it => extractPotSize(it.spec)).filter(Boolean))).sort();
+  const spSel = document.getElementById('plSpecFilter');
+  if (spSel) {
+    const curSp = spSel.value || 'ALL';
+    if (specs.length) {
+      spSel.style.display = 'inline-block';
+      spSel.innerHTML = `<option value="ALL">All Pot Sizes</option>` + specs.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+      spSel.value = specs.includes(curSp) ? curSp : 'ALL';
+    } else {
+      spSel.style.display = 'none'; spSel.value = 'ALL';
+    }
+  }
+
   // Populate dynamic Location filter
   const usedZones = Array.from(new Set(list.items.flatMap(it => (it.placements||[]).map(p => p.zone).filter(Boolean)))).sort((a,b) => {
     const na = parseInt(a,10), nb = parseInt(b,10);
@@ -3558,6 +3949,15 @@ function renderPlantListItems() {
   document.getElementById('plStampBar')?.classList.toggle('active', stampActive);
   const stampLbl = plStampShortLabel();
 
+  const bulkBar = document.getElementById('plBulkBar');
+  if (bulkBar) {
+    bulkBar.style.display = plBulkMode ? 'flex' : 'none';
+    const bCnt = document.getElementById('plBulkCount');
+    if (bCnt) bCnt.textContent = `${plSelectedIds.size} selected`;
+    const bBtn = document.getElementById('plBulkStampBtn');
+    if (bBtn) bBtn.textContent = stampActive ? `✅ Stamp Selected → ${stampLbl}` : '✅ Mark Selected Done';
+  }
+
   const filtered = getFilteredPlantItems(list);
   const isFiltered = filtered.length !== list.items.length;
   const dlBtn = document.getElementById('plDlXlsxBtn');
@@ -3575,6 +3975,8 @@ function renderPlantListItems() {
   box.innerHTML = slice.map(it => {
     const st = plEffectiveStatus(it);
     const isEd = plEditingId === it.id;
+    const isSel = plSelectedIds.has(it.id);
+    const potSz = extractPotSize(it.spec);
     const statusBadge = st === 'done'
       ? `<span class="pl-ico tick">✓</span><span>Done</span>`
       : (st === 'partial'
@@ -3596,13 +3998,14 @@ function renderPlantListItems() {
 
     return `<article class="pl-item st-${st}${isEd ? ' editing' : ''}" id="pli_${esc(it.id)}">
       <div class="pl-main">
+        ${plBulkMode ? `<input type="checkbox" class="pl-sel-chk" ${isSel?'checked':''} onchange="togglePlSelect('${esc(it.id)}')" aria-label="Select ${esc(it.name)}">` : ''}
         <div class="pl-title-wrap">
           <div class="pl-name">${esc(it.name)}</div>
           <div class="pl-meta">
             ${it.code ? `<span class="pl-chip code">${esc(it.code)}</span>` : ''}
-            ${it.spec ? `<span class="pl-chip">${esc(it.spec)}</span>` : ''}
-            ${it.plugWeek ? `<span class="pl-chip wk">Wk ${esc(it.plugWeek)}</span>` : ''}
-            ${it.supplier ? `<span class="pl-chip">${esc(it.supplier)}</span>` : ''}
+            ${it.spec ? `<span class="pl-chip${potSz?' clickable':''}" ${potSz?`onclick="plQuickFilterChip('spec','${esc(potSz)}')" title="Filter by ${esc(potSz)}"`:''}>${esc(it.spec)}</span>` : ''}
+            ${it.plugWeek ? `<span class="pl-chip wk clickable" onclick="plQuickFilterChip('wk','${esc(it.plugWeek)}')" title="Filter by Plug Week ${esc(it.plugWeek)}">Wk ${esc(it.plugWeek)}</span>` : ''}
+            ${it.supplier ? `<span class="pl-chip clickable" onclick="plQuickFilterChip('search','${esc(it.supplier).replace(/'/g,'')}')" title="Filter by supplier">${esc(it.supplier)}</span>` : ''}
             ${it.substitute ? `<span class="pl-chip sub">Sub: ${esc(it.substitute)}</span>` : ''}
           </div>
         </div>
