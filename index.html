@@ -343,9 +343,22 @@
     padding: 10px 12px; border-radius: 12px; background: var(--card-soft); border: 1px solid var(--border);
     margin-bottom: 12px;
   }
-  .pl-prog-wrap { height: 7px; background: #e6ece6; border-radius: 999px; overflow: hidden; margin-bottom: 12px; display: flex; }
+  .pl-prog-wrap { height: 7px; background: #e6ece6; border-radius: 999px; overflow: hidden; margin-bottom: 8px; display: flex; }
   .pl-prog-done { background: #16a34a; height: 100%; transition: width 0.25s ease; }
   .pl-prog-part { background: #eab308; height: 100%; transition: width 0.25s ease; }
+  .pl-req-bar {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 12px; border-radius: 10px; background: var(--card-soft); border: 1px solid var(--border);
+    margin-bottom: 12px; font-size: 12.5px; color: var(--ink-2);
+  }
+  .pl-req-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .pl-req-stat { display: inline-flex; align-items: center; gap: 4px; }
+  .pl-req-stat strong { font-family: var(--font-mono); font-size: 13px; color: var(--ink); }
+  .pl-req-filtered {
+    font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    background: var(--blue-light); color: var(--blue); border: 1px solid var(--blue-border);
+    font-family: var(--font-mono);
+  }
 
   .pl-stamp-bar {
     background: linear-gradient(180deg, #f3faf6, #f8fbf9);
@@ -387,9 +400,11 @@
   .pl-qty-col { text-align: right; flex-shrink: 0; }
   .pl-target-pill {
     display: inline-flex; align-items: center; gap: 5px;
-    padding: 4px 9px; border-radius: 8px; background: var(--bg-subtle);
+    padding: 4px 9px; border-radius: 8px; background: var(--bg-subtle); border: 1px solid transparent;
     font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; color: var(--primary);
+    cursor: pointer; transition: border-color 0.14s, background 0.14s;
   }
+  .pl-target-pill:hover { border-color: var(--accent-border); background: var(--accent-soft); }
   .pl-subqty { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
 
   /* Row 2: Generated Status + Bench & Location Line */
@@ -425,6 +440,12 @@
   .pl-count-readout { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
   .pl-item.st-done .pl-count-readout { color: #15803d; }
   .pl-item.st-partial .pl-count-readout { color: #a16207; }
+  .pl-left-pill {
+    display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+  }
+  .pl-left-pill.extra { background: #dcfce7; color: #15803d; border-color: #86efac; }
 
   .pl-loc-pill {
     display: inline-flex; align-items: center; gap: 4px;
@@ -785,7 +806,7 @@
         </div>
         <div class="kpi-grid">
           <div class="kpi"><span class="lbl">Lines</span><span class="val" id="kLines">0</span></div>
-          <div class="kpi"><span class="lbl">Target</span><span class="val" id="kTarget">0</span></div>
+          <div class="kpi"><span class="lbl">Required</span><span class="val" id="kTarget">0</span></div>
           <div class="kpi"><span class="lbl">Counted</span><span class="val" id="kActual" style="color:var(--accent);">0</span></div>
           <div class="kpi"><span class="lbl">Diff</span><span class="val" id="kDiff">0</span></div>
         </div>
@@ -801,7 +822,7 @@
         </div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>Status</th><th>Variety</th><th>Bench</th><th style="text-align:right;">Target</th><th style="text-align:right;">Counted</th><th></th></tr></thead>
+            <thead><tr><th>Status</th><th>Variety</th><th>Bench</th><th style="text-align:right;">Required</th><th style="text-align:right;">Counted</th><th></th></tr></thead>
             <tbody id="prodBody"></tbody>
           </table>
         </div>
@@ -814,7 +835,7 @@
             <option value="2">Z2</option><option value="1">Z1</option>
           </select>
           <input type="text" id="npBench" placeholder="Bench (e.g. 14L)" style="width:118px;">
-          <input type="number" id="npTarget" placeholder="Target" style="width:80px;">
+          <input type="number" id="npTarget" min="0" placeholder="Required #" style="width:98px;">
           <button class="btn primary" onclick="addProd()">Add</button>
         </div>
       </div>
@@ -828,14 +849,15 @@
           </div>
         </div>
         <div class="counter-card">
-          <div class="row" style="justify-content:space-between;">
+          <div class="row" style="justify-content:space-between; align-items:flex-start;">
             <div>
               <span id="cBadge" style="background:var(--primary);color:#fff;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700;">Zone 9 · Bench L</span>
               <h3 id="cTitle" style="margin-top:8px; font-size:18px;">Select a line</h3>
             </div>
             <div style="text-align:right;">
-              <span style="font-size:11px;color:var(--muted);font-weight:700;">TARGET</span>
-              <strong id="cTarget" class="mono" style="display:block;font-size:17px;">0</strong>
+              <label for="cReqIn" style="font-size:11px;color:var(--muted);font-weight:700;display:block;margin-bottom:3px;">REQUIRED #</label>
+              <input type="number" id="cReqIn" min="0" value="0" style="width:82px; text-align:right; font-weight:800; font-family:var(--font-mono); padding:4px 7px; font-size:15px;" onchange="setProdRequired(this.value)" onkeydown="if(event.key==='Enter'){this.blur();}">
+              <span id="cTarget" class="mono" style="display:block;font-size:11.5px;color:var(--muted);margin-top:3px;">0 left</span>
             </div>
           </div>
           <div class="stepper">
@@ -848,7 +870,7 @@
           <div class="row">
             <input type="number" id="cExact" placeholder="Exact number..." style="flex:1;">
             <button class="btn green" onclick="setExactCount()">Set</button>
-            <button class="btn soft-green" onclick="hitProdTarget()" title="Set counted equal to target">✓ Hit Target</button>
+            <button class="btn soft-green" onclick="hitProdTarget()" title="Set counted equal to required number">✓ Hit Required</button>
           </div>
         </div>
       </div>
@@ -896,7 +918,7 @@
           <div class="row" style="gap:6px;">
             <input type="text" id="plAddName" placeholder="Plant description (e.g. Begonia Dragon Wing Pink)" style="flex:2; min-width:180px;" onkeydown="if(event.key==='Enter'){event.preventDefault(); addSinglePlantLine();}">
             <input type="text" id="plAddSpec" placeholder="Pot / Spec (e.g. FP11)" style="width:120px;">
-            <input type="number" id="plAddTarget" min="0" placeholder="Number" style="width:92px;">
+            <input type="number" id="plAddTarget" min="0" placeholder="Required #" style="width:104px;">
             <button type="button" class="btn green" onclick="addSinglePlantLine()">+ Add Line</button>
           </div>
           <details class="more-toggle" style="margin-top:2px;">
@@ -924,6 +946,7 @@
           <div id="plProgDone" class="pl-prog-done" style="width:0%;"></div>
           <div id="plProgPart" class="pl-prog-part" style="width:0%;"></div>
         </div>
+        <div id="plReqSummary" class="pl-req-bar"></div>
 
         <!-- QUICK-STAMP LOCATION BAR (FASTER THAN REPEATING DROPDOWNS!) -->
         <div class="pl-stamp-bar" id="plStampBar">
@@ -1946,7 +1969,7 @@ function renderCounts() {
     const done = (+p.target > 0 && +p.actual >= +p.target);
     const part = (!done && +p.actual > 0);
     const stHtml = done
-      ? `<span class="pl-ico tick" title="Target met">✓</span>`
+      ? `<span class="pl-ico tick" title="Required met">✓</span>`
       : (part ? `<span class="pl-ico circle" title="In progress"></span>` : `<span class="pl-ico circle-soft" title="To do"></span>`);
     return `<tr class="${p.id===selectedProdId?'sel':''}" onclick="selectedProdId='${p.id}';renderCounts();">
       <td style="width:34px;text-align:center;">${stHtml}</td>
@@ -1959,13 +1982,24 @@ function renderCounts() {
   const cur = all.find(p => p.id === selectedProdId) || list[0];
   document.getElementById('cBadge').textContent = cur ? `Zone ${cur.zone} · Bench ${cur.bench||'General'}` : 'No item';
   document.getElementById('cTitle').textContent = cur ? cur.variety : 'Add a line';
-  document.getElementById('cTarget').textContent = cur ? `${cur.target} trays` : '0';
+  const reqIn = document.getElementById('cReqIn');
+  if (reqIn && document.activeElement !== reqIn) reqIn.value = cur ? (+cur.target || 0) : 0;
+  const rem = cur ? Math.max(0, (+cur.target || 0) - (+cur.actual || 0)) : 0;
+  const extra = cur && +cur.target > 0 && +cur.actual > +cur.target ? (+cur.actual - +cur.target) : 0;
+  const cTgt = document.getElementById('cTarget');
+  if (cTgt) {
+    if (!cur || !(+cur.target > 0)) { cTgt.textContent = 'No required #'; cTgt.style.color = 'var(--muted)'; }
+    else if (rem > 0) { cTgt.textContent = `${rem} left`; cTgt.style.color = '#b45309'; }
+    else if (extra > 0) { cTgt.textContent = `✓ Met (+${extra} extra)`; cTgt.style.color = '#15803d'; }
+    else { cTgt.textContent = '✓ Required met'; cTgt.style.color = '#15803d'; }
+  }
   document.getElementById('cActual').textContent = cur ? cur.actual : '0';
 }
 function stepProd(d) { const l = appState.productionList; if (!l.length) return; const i = l.findIndex(p=>p.id===selectedProdId); selectedProdId = l[(i+d+l.length)%l.length].id; renderCounts(); }
 function adjCount(d) { const it = appState.productionList.find(p=>p.id===selectedProdId); if (!it) return; it.actual = Math.max(0, (+it.actual||0)+d); saveState(true); renderCounts(); }
 function setExactCount() { const it = appState.productionList.find(p=>p.id===selectedProdId), v = parseInt(document.getElementById('cExact').value,10); if (!it || isNaN(v)) return; it.actual = Math.max(0, v); document.getElementById('cExact').value=''; saveState(true); renderCounts(); }
-function hitProdTarget() { const it = appState.productionList.find(p=>p.id===selectedProdId); if (!it) return; pushUndo(`hit target ${it.variety}`); it.actual = Math.max(0, +it.target||0); saveState(true); renderCounts(); toast(`✅ ${it.variety}: ${it.actual}/${it.target}`); }
+function setProdRequired(val) { const it = appState.productionList.find(p=>p.id===selectedProdId), v = parseInt(val, 10); if (!it || isNaN(v)) return; pushUndo(`set required ${it.variety}`); it.target = Math.max(0, v); saveState(true); renderCounts(); toast(`Required for ${it.variety}: ${it.target}`); }
+function hitProdTarget() { const it = appState.productionList.find(p=>p.id===selectedProdId); if (!it) return; pushUndo(`hit required ${it.variety}`); it.actual = Math.max(0, +it.target||0); saveState(true); renderCounts(); toast(`✅ ${it.variety}: ${it.actual}/${it.target}`); }
 function addProd() {
   const v = document.getElementById('npVar').value.trim(); if (!v) return;
   const z = +document.getElementById('npZone').value || 9, b = normBench(z, document.getElementById('npBench').value), t = +document.getElementById('npTarget').value || 0;
@@ -2010,7 +2044,7 @@ async function importProdCSV(ev) {
   } catch (err) { toast('Could not import file: ' + (err.message || 'invalid format')); }
   ev.target.value = '';
 }
-function exportProdCSV() { dlCSV([['Variety','Zone','Bench','Target','Counted','Date'], ...appState.productionList.map(p=>[p.variety,p.zone,p.bench,p.target,p.actual,entryDate(p)])], `counts_${todayISO()}.csv`); }
+function exportProdCSV() { dlCSV([['Variety','Zone','Bench','Required','Counted','Left','Date'], ...appState.productionList.map(p=>[p.variety,p.zone,p.bench,p.target,p.actual,Math.max(0,(+p.target||0)-(+p.actual||0)),entryDate(p)])], `counts_${todayISO()}.csv`); }
 
 /* TAB 5: WEEKLY REVIEW */
 function weekBounds(off = 0) {
@@ -2310,23 +2344,23 @@ function findPlantListMatches(query, list) {
   if (!list || !list.items.length) return [];
   const raw = String(query || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
   if (!raw) return [];
-  const stop = new Set(['mark','set','put','add','log','done','finished','complete','completed','potted','update','tick','check','reset','todo','to','do','in','on','at','of','the','a','an','is','are','where','find','show','status','for','my','list','zone','bench','front','middle','back','north','south','end','under','hanging','outside','cold','frame','tunnel','standing','out','left','right','all','full','green','yellow','circle','with','and']);
+  const rawWords = new Set(raw.split(/\s+/).filter(Boolean));
+  const stop = new Set(['mark','set','put','add','log','done','finished','complete','completed','potted','update','change','tick','check','reset','todo','to','do','in','on','at','of','the','a','an','is','are','how','many','what','whats','where','find','locate','show','status','for','my','list','zone','bench','front','middle','back','north','south','end','under','hanging','outside','cold','frame','tunnel','standing','out','left','right','all','full','green','yellow','circle','with','and','required','req','number','target','need','needed','total','more','plus','move','place','qty','quantity','count']);
   const tokens = raw.split(/\s+/).filter(w => w.length >= 2 && !stop.has(w) && !/^\d+$/.test(w));
   if (!tokens.length) return [];
   const scored = [];
   list.items.forEach(it => {
-    const code = (it.code || '').toLowerCase();
+    const code = (it.code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const name = (it.name || '').toLowerCase();
     const spec = (it.spec || '').toLowerCase();
-    const hay = `${code} ${name} ${spec}`;
     let score = 0;
-    if (code && raw.includes(code)) score += 100;
+    if (code && code.length >= 2 && rawWords.has(code)) score += 100;
     const phrase = tokens.join(' ');
     if (phrase.length >= 4 && name.includes(phrase)) score += 60;
     let hits = 0;
     tokens.forEach(tok => {
       if (name.includes(tok)) { score += 14; hits++; }
-      else if (code.includes(tok) || spec.includes(tok)) { score += 8; hits++; }
+      else if (code === tok || spec.includes(tok)) { score += 8; hits++; }
     });
     if (hits === tokens.length && tokens.length >= 2) score += 25;
     if (score >= 14) scored.push({ item: it, score });
@@ -2380,23 +2414,36 @@ function quickPlantListCommand(q) {
   if (!list || !list.items.length) return null;
   const ql = q.toLowerCase().trim();
 
-  // 1. Progress / summary query
-  if (/\b(list\s+progress|plant\s+list|how\s+many\s+(are\s+)?(done|left|remaining|to\s+do)|how\s+is\s+(my|the)\s+list)\b/i.test(ql)) {
-    let done = 0, part = 0, todo = 0;
-    list.items.forEach(it => { const s = plEffectiveStatus(it); if (s==='done') done++; else if (s==='partial') part++; else todo++; });
-    const pct = Math.round((done / list.items.length) * 100);
-    return `**${list.name}**: **${done} / ${list.items.length}** done (${pct}%) — ✅ ${done} done, 🟡 ${part} in progress, 🟡 ${todo} to do.`;
+  // 1. Progress / total required summary query
+  if (/\b(list\s+progress|plant\s+list|how\s+many\s+(lines?\s+|plants?\s+)?(are\s+)?(done|left|remaining|to\s+do|required)|total\s+required|required\s+total|how\s+is\s+(my|the)\s+list)\b/i.test(ql) && !/\bweek\s*\d{1,2}\b/i.test(ql)) {
+    // If asking about a specific plant (e.g. "how many Abutilon are required"), let step 4 answer for that plant
+    const specificHits = /\bhow\s+many\b/i.test(ql) && !/\b(lines?|plants?|total|list)\b/i.test(ql) ? findPlantListMatches(q, list) : [];
+    if (!specificHits.length) {
+      let done = 0, part = 0, todo = 0, totReq = 0, totDone = 0;
+      list.items.forEach(it => {
+        const s = plEffectiveStatus(it);
+        if (s==='done') done++; else if (s==='partial') part++; else todo++;
+        totReq += (+it.target || 0);
+        totDone += (+it.doneQty || 0);
+      });
+      const totLeft = Math.max(0, totReq - totDone);
+      const pct = Math.round((done / list.items.length) * 100);
+      return `**${list.name}**: **${done} / ${list.items.length}** lines done (${pct}%) — ✅ ${done} done, 🟡 ${part} in progress, 🟡 ${todo} to do. **Required**: ${totReq.toLocaleString()} · **Done**: ${totDone.toLocaleString()} · **Left**: ${totLeft.toLocaleString()}.`;
+    }
   }
 
-  // 2. Plug week query
+  // 2. Plug week query (including required totals)
   const wkM = ql.match(/\b(?:plug\s*)?week\s*(\d{1,2})\b/i);
-  if (wkM && /\b(left|remaining|todo|to\s*do|show|what|list)\b/i.test(ql)) {
+  if (wkM && /\b(left|remaining|todo|to\s*do|show|what|list|required|total|how\s+many)\b/i.test(ql)) {
     const wk = wkM[1];
     const matches = list.items.filter(it => String(it.plugWeek || '') === wk);
     const rem = matches.filter(it => plEffectiveStatus(it) !== 'done');
     if (!matches.length) return `No items found for **Plug Week ${wk}** in **${list.name}**.`;
+    const wkReq = matches.reduce((a, it) => a + (+it.target || 0), 0);
+    const wkDone = matches.reduce((a, it) => a + (+it.doneQty || 0), 0);
+    const wkLeft = Math.max(0, wkReq - wkDone);
     const sample = rem.slice(0, 6).map(it => `${it.name} (${it.doneQty||0}/${it.target})`).join(', ');
-    return `**Plug Week ${wk}**: ${matches.length - rem.length}/${matches.length} done, **${rem.length} remaining**${rem.length ? ` — e.g. ${sample}${rem.length > 6 ? '…' : ''}` : ''}.`;
+    return `**Plug Week ${wk}**: ${matches.length - rem.length}/${matches.length} lines done (**${rem.length} lines left**) · **Required**: ${wkReq.toLocaleString()} · **Done**: ${wkDone.toLocaleString()} · **Left**: ${wkLeft.toLocaleString()}${rem.length ? ` — e.g. ${sample}${rem.length > 6 ? '…' : ''}` : ''}.`;
   }
 
   // 3. What is on Zone X [Bench Y]?
@@ -2410,22 +2457,24 @@ function quickPlantListCommand(q) {
     }
   }
 
-  // 4. Where is / Find / Check status of a plant
-  if (/^(where\s+is|find|locate|check|status\s+of|how\s+many)\b/i.test(ql)) {
+  // 4. Where is / Find / Check status / Required number of a plant
+  if (/^(where\s+is|find|locate|check|status\s+of|how\s+many|what(?:'s| is)\s+the\s+required)\b/i.test(ql)) {
     const hits = findPlantListMatches(q, list);
     if (hits.length) {
       return hits.slice(0, 4).map(it => {
         const st = plEffectiveStatus(it);
         const ico = st === 'done' ? '✅ Done' : (st === 'partial' ? '🟡 In Progress' : '🟡 To Do');
         const loc = plPlacementsText(it) || 'Bench & location not set yet';
-        return `**${it.name}**${it.spec ? ' (' + it.spec + ')' : ''} — ${ico} (${it.doneQty || 0}/${it.target}) · 📍 ${loc}`;
+        const left = Math.max(0, (+it.target || 0) - (+it.doneQty || 0));
+        return `**${it.name}**${it.spec ? ' (' + it.spec + ')' : ''} — ${ico} · Required: **${it.target || 0}**, Done: **${it.doneQty || 0}**${left > 0 ? ` (${left} left)` : ''} · 📍 ${loc}`;
       }).join('\n');
     }
   }
 
-  // 5. Direct Update / Increment (+ more) / Move / Mark Done / Set Count & Bench on active Plant List
+  // 5. Direct Update / Set Required / Increment (+ more) / Move / Mark Done / Set Count & Bench on active Plant List
+  const isSetRequired = /\b(required(\s+number|\s+qty)?|req\s*#?)\b/i.test(ql) && !/^(how\s+many|what|check|find)\b/i.test(ql);
   const isIncrement = /\b(add\s+\d+\s+more|plus\s+\d+|\+\s*\d+|\d+\s+more)\b/i.test(ql);
-  const isUpdateVerb = isIncrement || /\b(mark|done|finished|complete|completed|potted|tick|reset|to\s*do|todo|move|place|put|set|update)\b/i.test(ql);
+  const isUpdateVerb = isSetRequired || isIncrement || /\b(mark|done|finished|complete|completed|potted|tick|reset|to\s*do|todo|move|place|put|set|update|change)\b/i.test(ql);
   if (isUpdateVerb && !/\bwater(ed|ing)?\b/i.test(ql)) {
     const hits = findPlantListMatches(q, list);
     if (hits.length) {
@@ -2443,6 +2492,20 @@ function quickPlantListCommand(q) {
         .replace(/\b\d+l\b/ig, '');
       const numM = cleanedForQty.match(/\b(\d+)\b/);
       const qtyNum = numM ? parseInt(numM[1], 10) : null;
+
+      if (isSetRequired && qtyNum !== null) {
+        pushUndo(`set required ${it.name} to ${qtyNum}`);
+        it.target = Math.max(0, qtyNum);
+        it.status = (it.target > 0 && (+it.doneQty || 0) >= it.target) ? 'done' : ((+it.doneQty || 0) > 0 ? 'partial' : 'todo');
+        it.updatedDate = todayISO();
+        saveState(true);
+        renderPlantLists();
+        if (currentTab === 'zones') loadZone(currentZone);
+        const st = plEffectiveStatus(it);
+        const ico = st === 'done' ? '✅ Done' : (st === 'partial' ? '🟡 In Progress' : '🟡 To Do');
+        const left = Math.max(0, it.target - (+it.doneQty || 0));
+        return `Updated **Required** for **${it.name}** → **${it.target}** (${ico} · ${it.doneQty || 0}/${it.target}${left > 0 ? ` · ${left} left` : ''}).`;
+      }
 
       pushUndo(`AI update ${it.name}`);
       if (isReset) {
@@ -2709,10 +2772,17 @@ function parseRawPlantLine(line, defZone) {
 
   if (specM) cleaned = cleaned.replace(new RegExp(`\\b${specM[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'), ' ');
 
+  const reqPairM = cleaned.match(/\b(\d+)\s*(?:done|potted|counted)\b[\s,/&-]*\b(\d+)\s*(?:required|req|needed)\b/i)
+    || cleaned.match(/\b(\d+)\s*(?:required|req|needed)\b[\s,/&-]*\b(\d+)\s*(?:done|potted|counted)\b/i);
   if (slashM) {
     actual = parseInt(slashM[1], 10) || 0;
     target = parseInt(slashM[2], 10) || 0;
     cleaned = cleaned.replace(slashM[0], ' ');
+  } else if (reqPairM) {
+    const firstIsDone = /\b\d+\s*(?:done|potted|counted)\b/i.test(reqPairM[0].slice(0, Math.floor(reqPairM[0].length / 2) + 4));
+    actual = parseInt(firstIsDone ? reqPairM[1] : reqPairM[2], 10) || 0;
+    target = parseInt(firstIsDone ? reqPairM[2] : reqPairM[1], 10) || 0;
+    cleaned = cleaned.replace(reqPairM[0], ' ');
   } else {
     const nums = cleaned.match(/\b\d+\b/g) || [];
     if (nums.length >= 1) {
@@ -2723,13 +2793,15 @@ function parseRawPlantLine(line, defZone) {
   }
 
   let name = cleaned
-    .replace(/\b(trays?|pots?|plugs?|units?|x|done|finished|complete|completed|on|in|at|for|to|of)\b/ig, ' ')
+    .replace(/\b(trays?|pots?|plugs?|units?|x|done|finished|complete|completed|required|req|needed|number|on|in|at|for|to|of)\b/ig, ' ')
     .replace(/[\-|:,;()]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
   if (!name || name.length < 2 || /^\d+$/.test(name)) return null;
-  return { name, spec, target, actual, zone: z, bench: normBench(z, b), location: loc.location || '', done: isDone || (target > 0 && actual >= target) };
+  const hasExplicitPair = !!(slashM || reqPairM);
+  const doneFlag = hasExplicitPair ? (target > 0 && actual >= target) : (isDone || (target > 0 && actual >= target));
+  return { name, spec, target, actual, zone: z, bench: normBench(z, b), location: loc.location || '', done: doneFlag };
 }
 
 function parseRawPlantEntries(rawText) {
@@ -2899,15 +2971,15 @@ function buildPlantListAiContext(q) {
     const lines = picked.map(it => {
       const st = plEffectiveStatus(it);
       const loc = plPlacementsText(it) || 'unplaced';
-      return `- [${it.code || '-'}] ${it.name} (${it.spec || ''}) | Need:${it.target} | Done:${it.doneQty||0} | Status:${st} | Loc:${loc}${it.plugWeek ? ' | Wk:'+it.plugWeek : ''}${it.note ? ' | Note:'+it.note : ''}`;
+      return `- [${it.code || '-'}] ${it.name} (${it.spec || ''}) | Required:${it.target} | Done:${it.doneQty||0} | Status:${st} | Loc:${loc}${it.plugWeek ? ' | Wk:'+it.plugWeek : ''}${it.note ? ' | Note:'+it.note : ''}`;
     }).join('\n');
     plBlock = `\nActive Plant List: "${list.name}" (${list.items.length} total: ${done} done, ${part} in progress, ${todo} to do).\nRelevant Plant List rows:\n${lines}`;
   }
   return `\nGlasshouse Bench Layout: Zones 1–2 are Left/Right (L/R). Zones 3–7 & 9–12 are Benches 1–25 Left/Right (e.g. 14L, 25R). Zone 8 is Benches 1–15 Left/Middle/Right (e.g. 7M).
 Current Production Counts (${(appState.productionList||[]).length} lines):\n${prodSample || '(empty)'}${plBlock}
 If the user asks to update Plant List items OR gives raw plant data to add to Production Counts or Plant Lists, append this exact JSON block at the very end of your reply:
-<ACTION>{"updates":[{"match":"plant name or code","status":"done|partial|todo","doneQty":48,"placements":[{"zone":"9","bench":"14L","location":"Front","qty":48}],"note":""}],"addProduction":[{"variety":"Plant Name (FP11)","zone":9,"bench":"14L","target":150,"actual":0}],"addPlantList":{"listName":"","items":[{"name":"Plant Name","spec":"FP11","target":150,"doneQty":0,"status":"todo","placements":[{"zone":"9","bench":"14L","location":"Front","qty":150}],"plugWeek":"","supplier":"","note":""}]}}</ACTION>
-Include only the keys needed (updates, addProduction, and/or addPlantList).`;
+<ACTION>{"updates":[{"match":"plant name or code","status":"done|partial|todo","target":48,"doneQty":48,"placements":[{"zone":"9","bench":"14L","location":"Front","qty":48}],"note":""}],"addProduction":[{"variety":"Plant Name (FP11)","zone":9,"bench":"14L","target":150,"actual":0}],"addPlantList":{"listName":"","items":[{"name":"Plant Name","spec":"FP11","target":150,"doneQty":0,"status":"todo","placements":[{"zone":"9","bench":"14L","location":"Front","qty":150}],"plugWeek":"","supplier":"","note":""}]}}</ACTION>
+Include only the keys needed (updates, addProduction, and/or addPlantList). Use "target" for the Required number.`;
 }
 
 function applyAiPlantListActions(rawText) {
@@ -2933,13 +3005,15 @@ function applyAiPlantListActions(rawText) {
         const hits = findPlantListMatches(u.match || u.name || u.code || '', list);
         if (!hits.length) return;
         const it = hits[0];
+        const reqVal = typeof u.target === 'number' ? u.target : (typeof u.required === 'number' ? u.required : null);
+        if (reqVal !== null && !isNaN(reqVal)) it.target = Math.max(0, Math.round(reqVal));
         if (typeof u.doneQty === 'number' && !isNaN(u.doneQty)) it.doneQty = Math.max(0, Math.round(u.doneQty));
         if (['done','partial','todo'].includes(u.status)) {
           it.status = u.status;
           if (u.status === 'done' && it.target > 0 && (!it.doneQty || it.doneQty < it.target)) it.doneQty = it.target;
           if (u.status === 'todo') it.doneQty = 0;
-        } else if (typeof u.doneQty === 'number') {
-          it.status = (it.target > 0 && it.doneQty >= it.target) ? 'done' : (it.doneQty > 0 ? 'partial' : 'todo');
+        } else if (typeof u.doneQty === 'number' || reqVal !== null) {
+          it.status = (it.target > 0 && (+it.doneQty || 0) >= it.target) ? 'done' : ((+it.doneQty || 0) > 0 ? 'partial' : 'todo');
         }
         if (Array.isArray(u.placements) && u.placements.length) {
           const cleanP = u.placements.map(p => ({
@@ -3509,7 +3583,7 @@ function parsePlantRowsToItems(rows, fallbackName) {
   let title = '';
   let headerIdx = -1, bestScore = 0;
   const normHdr = s => String(s || '').split('/')[0].trim().toLowerCase();
-  const headerRe = /^(plant\s*code|code|sku|plant\s*description|plant|description|variety|crop|name|spec\s*code|spec|pot|size|total|target|qty|quantity|min\s*quantity|min\s*qty|supplier|confirmed\s*supplier|plug\s*week|week|order\s*status|ordered\s*quantity|ordered\s*qty|substitute)$/i;
+  const headerRe = /^(plant\s*code|code|sku|plant\s*description|plant|description|variety|crop|name|spec\s*code|spec|pot|size|total|target|required(\s*(number|qty|#))?|req(\s*(number|qty|#))?|qty|quantity|min\s*quantity|min\s*qty|supplier|confirmed\s*supplier|plug\s*week|week|order\s*status|ordered\s*quantity|ordered\s*qty|substitute)$/i;
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
     const r = rows[i];
     const nonEmpty = r.filter(Boolean);
@@ -3528,7 +3602,7 @@ function parsePlantRowsToItems(rows, fallbackName) {
       if (cols.code < 0 && /^(plant\s*code|code|sku)$/.test(k)) cols.code = idx;
       else if (cols.name < 0 && /^(plant\s*description|plant\s*name|variety|crop|plant|description|name)$/.test(k)) cols.name = idx;
       else if (cols.spec < 0 && /^(spec\s*code|spec|pot|pot\s*size|size)$/.test(k)) cols.spec = idx;
-      else if (cols.target < 0 && /^(total|target|qty|quantity|number|needed)$/.test(k)) cols.target = idx;
+      else if (cols.target < 0 && /^(total|target|required(\s*(number|qty|#))?|req(\s*(number|qty|#))?|qty|quantity|number|needed)$/.test(k)) cols.target = idx;
       else if (cols.minQty < 0 && /^(min\s*quantity|min\s*qty|minimum)$/.test(k)) cols.minQty = idx;
       else if (cols.confSupplier < 0 && /^(confirmed\s*supplier)$/.test(k)) cols.confSupplier = idx;
       else if (cols.supplier < 0 && /^(supplier\s*1|supplier|source)$/.test(k)) cols.supplier = idx;
@@ -3932,10 +4006,12 @@ function renderPlantLists() {
 
 function renderPlantListItems() {
   const list = getActivePlantList(); if (!list) return;
-  let done = 0, part = 0, todo = 0;
+  let done = 0, part = 0, todo = 0, totReq = 0, totDone = 0;
   list.items.forEach(it => {
     const st = plEffectiveStatus(it);
     if (st === 'done') done++; else if (st === 'partial') part++; else todo++;
+    totReq += (+it.target || 0);
+    totDone += (+it.doneQty || 0);
   });
   const tot = list.items.length || 1;
   document.getElementById('plKTotal').textContent = list.items.length;
@@ -3960,6 +4036,22 @@ function renderPlantListItems() {
 
   const filtered = getFilteredPlantItems(list);
   const isFiltered = filtered.length !== list.items.length;
+  const reqBar = document.getElementById('plReqSummary');
+  if (reqBar) {
+    const totLeft = Math.max(0, totReq - totDone);
+    let fltHtml = '';
+    if (isFiltered) {
+      const fReq = filtered.reduce((a, it) => a + (+it.target || 0), 0);
+      const fDone = filtered.reduce((a, it) => a + (+it.doneQty || 0), 0);
+      const fLeft = Math.max(0, fReq - fDone);
+      fltHtml = `<span class="pl-req-filtered">Filtered: ${fReq.toLocaleString()} required · ${fLeft.toLocaleString()} left</span>`;
+    }
+    reqBar.innerHTML = `<div class="pl-req-stats">
+      <span class="pl-req-stat">📋 Required: <strong>${totReq.toLocaleString()}</strong></span>
+      <span class="pl-req-stat">✅ Done: <strong style="color:#15803d;">${totDone.toLocaleString()}</strong></span>
+      <span class="pl-req-stat">⏳ Left: <strong style="color:${totLeft > 0 ? '#b45309' : '#15803d'};">${totLeft.toLocaleString()}</strong></span>
+    </div>${fltHtml}`;
+  }
   const dlBtn = document.getElementById('plDlXlsxBtn');
   if (dlBtn) dlBtn.textContent = isFiltered ? `📥 Download Excel (${filtered.length})` : '📥 Download Excel';
   document.getElementById('plMatchInfo').textContent = isFiltered ? `Showing ${filtered.length} of ${list.items.length}` : `${list.items.length} lines`;
@@ -3988,12 +4080,16 @@ function renderPlantListItems() {
       ? ps.map(p => `<span class="pl-loc-pill">📍 ${esc(plFormatPlacement(p, multi))}</span>`).join('')
       : `<span class="pl-loc-empty">Tap to pick bench &amp; location…</span>`;
     const countTxt = it.target > 0 ? `${it.doneQty || 0} / ${it.target}` : (it.doneQty > 0 ? `${it.doneQty} done` : '0');
+    const remQty = (+it.target > 0) ? ((+it.target || 0) - (+it.doneQty || 0)) : 0;
+    const leftPillHtml = (+it.target > 0 && remQty > 0)
+      ? `<span class="pl-left-pill">${remQty} left</span>`
+      : ((+it.target > 0 && remQty < 0) ? `<span class="pl-left-pill extra">+${Math.abs(remQty)} extra</span>` : '');
     const subQtyBits = [];
     if (it.minQty !== '' && it.minQty !== undefined && Number(it.minQty) !== Number(it.target)) subQtyBits.push(`Min ${it.minQty}`);
     if (it.orderedQty !== '' && it.orderedQty !== undefined && it.orderedQty !== '*') subQtyBits.push(`Ord ${it.orderedQty}`);
 
     const quickBtn = st !== 'done'
-      ? `<button type="button" class="btn stamp" onclick="event.stopPropagation(); quickDonePlantItem('${esc(it.id)}')" title="${stampActive ? 'Mark done & stamp ' + esc(stampLbl) : 'Mark full number done'}">${stampActive ? `✓ Stamp ${esc(stampLbl)}` : '✓ Done'}</button>`
+      ? `<button type="button" class="btn stamp" onclick="event.stopPropagation(); quickDonePlantItem('${esc(it.id)}')" title="${stampActive ? 'Mark done & stamp ' + esc(stampLbl) : 'Mark full required number done'}">${stampActive ? `✓ Stamp ${esc(stampLbl)}` : '✓ Done'}</button>`
       : (stampActive && !ps.length ? `<button type="button" class="btn sm soft-green" onclick="event.stopPropagation(); quickDonePlantItem('${esc(it.id)}')">📍 Stamp ${esc(stampLbl)}</button>` : '');
 
     return `<article class="pl-item st-${st}${isEd ? ' editing' : ''}" id="pli_${esc(it.id)}">
@@ -4010,7 +4106,7 @@ function renderPlantListItems() {
           </div>
         </div>
         <div class="pl-qty-col">
-          <span class="pl-target-pill">${it.target > 0 ? `Need ${it.target}` : 'No target'}</span>
+          <span class="pl-target-pill" onclick="togglePlEditor('${esc(it.id)}', true)" title="Tap to edit Required number">${it.target > 0 ? `Required ${it.target}` : 'Set Required #'}</span>
           ${subQtyBits.length ? `<div class="pl-subqty">${esc(subQtyBits.join(' · '))}</div>` : ''}
         </div>
       </div>
@@ -4019,6 +4115,7 @@ function renderPlantListItems() {
         <div class="pl-track-left">
           <button type="button" class="pl-status-btn ${st}" onclick="event.stopPropagation(); cyclePlStatus('${esc(it.id)}')" title="Tap to toggle Done (green tick) / In Progress (yellow circle)">${statusBadge}</button>
           <span class="pl-count-readout">${esc(countTxt)}</span>
+          ${leftPillHtml}
           ${locHtml}
           ${it.note ? `<span class="pl-note-inline">📝 ${esc(it.note)}</span>` : ''}
         </div>
@@ -4103,8 +4200,13 @@ function cyclePlStatus(id) {
   renderPlantLists();
 }
 
-function togglePlEditor(id) {
-  if (plEditingId === id) { plEditingId = null; plDraft = null; renderPlantListItems(); return; }
+function togglePlEditor(id, focusRequired = false) {
+  if (plEditingId === id && !focusRequired) { plEditingId = null; plDraft = null; renderPlantListItems(); return; }
+  if (plEditingId === id && focusRequired) {
+    const reqEl = document.getElementById('plEdTargetIn');
+    if (reqEl) { reqEl.focus(); reqEl.select(); }
+    return;
+  }
   const list = getActivePlantList(); if (!list) return;
   const it = list.items.find(x => x.id === id); if (!it) return;
   plEditingId = id;
@@ -4115,11 +4217,24 @@ function togglePlEditor(id) {
   }
   plDraft = {
     status: plEffectiveStatus(it),
+    target: +it.target || 0,
     doneQty: +it.doneQty || 0,
     placements: existing,
     note: it.note || ''
   };
   renderPlantListItems();
+  if (focusRequired) {
+    const reqEl = document.getElementById('plEdTargetIn');
+    if (reqEl) { reqEl.focus(); reqEl.select(); }
+  }
+}
+
+function plEdLeftText(target, doneQty) {
+  if (!(target > 0)) return 'No required # set';
+  const diff = target - doneQty;
+  if (diff > 0) return `${diff} left`;
+  if (diff < 0) return `✓ Met (+${Math.abs(diff)} extra)`;
+  return '✓ Required met';
 }
 
 function renderPlEditorHtml(it) {
@@ -4155,23 +4270,34 @@ function renderPlEditorHtml(it) {
     </div>`;
   }).join('');
 
+  const leftTxt = plEdLeftText(d.target, d.doneQty);
+  const leftColor = d.target > 0 ? (d.doneQty >= d.target ? '#15803d' : '#b45309') : 'var(--muted)';
+
   return `<div class="pl-editor" onclick="event.stopPropagation();">
     <div class="pl-ed-sec">
       <span class="pl-ed-lbl">Status</span>
-      <button type="button" class="pl-st-pill${d.status==='done'?' active-done':''}" onclick="plEdSetStatus('done', ${it.target})"><span class="pl-ico tick">✓</span> Done</button>
-      <button type="button" class="pl-st-pill${d.status==='partial'?' active-partial':''}" onclick="plEdSetStatus('partial', ${it.target})"><span class="pl-ico circle"></span> In Progress</button>
-      <button type="button" class="pl-st-pill${d.status==='todo'?' active-todo':''}" onclick="plEdSetStatus('todo', ${it.target})"><span class="pl-ico circle-soft"></span> To Do</button>
-      <button type="button" class="btn sm" id="plVoiceBtn" style="margin-left:auto;" onclick="plEdVoiceFill(${it.target})">🎤 Speak Fill</button>
+      <button type="button" class="pl-st-pill${d.status==='done'?' active-done':''}" onclick="plEdSetStatus('done')"><span class="pl-ico tick">✓</span> Done</button>
+      <button type="button" class="pl-st-pill${d.status==='partial'?' active-partial':''}" onclick="plEdSetStatus('partial')"><span class="pl-ico circle"></span> In Progress</button>
+      <button type="button" class="pl-st-pill${d.status==='todo'?' active-todo':''}" onclick="plEdSetStatus('todo')"><span class="pl-ico circle-soft"></span> To Do</button>
+      <button type="button" class="btn sm" id="plVoiceBtn" style="margin-left:auto;" onclick="plEdVoiceFill()">🎤 Speak Fill</button>
     </div>
 
     <div class="pl-ed-sec">
-      <span class="pl-ed-lbl">Number</span>
-      <button type="button" class="btn sm" onclick="plEdAdjQty(-10, ${it.target})">-10</button>
-      <button type="button" class="btn sm" onclick="plEdAdjQty(-1, ${it.target})">-1</button>
-      <input type="number" id="plEdQtyIn" min="0" value="${d.doneQty}" style="width:90px; text-align:center; font-weight:700;" oninput="plEdSetQty(this.value, ${it.target})">
-      <button type="button" class="btn sm" onclick="plEdAdjQty(1, ${it.target})">+1</button>
-      <button type="button" class="btn sm" onclick="plEdAdjQty(10, ${it.target})">+10</button>
-      ${it.target > 0 ? `<button type="button" class="btn sm soft-green" onclick="plEdSetQty(${it.target}, ${it.target}, true)">= Full (${it.target})</button>` : ''}
+      <span class="pl-ed-lbl">Required #</span>
+      <button type="button" class="btn sm" onclick="plEdAdjTarget(-10)">-10</button>
+      <input type="number" id="plEdTargetIn" min="0" value="${d.target}" style="width:94px; text-align:center; font-weight:800; font-family:var(--font-mono);" oninput="plEdSetTarget(this.value)">
+      <button type="button" class="btn sm" onclick="plEdAdjTarget(10)">+10</button>
+      <span id="plEdLeftNote" class="mono" style="font-size:12px; font-weight:700; color:${leftColor}; margin-left:4px;">${esc(leftTxt)}</span>
+    </div>
+
+    <div class="pl-ed-sec">
+      <span class="pl-ed-lbl">Done #</span>
+      <button type="button" class="btn sm" onclick="plEdAdjQty(-10)">-10</button>
+      <button type="button" class="btn sm" onclick="plEdAdjQty(-1)">-1</button>
+      <input type="number" id="plEdQtyIn" min="0" value="${d.doneQty}" style="width:94px; text-align:center; font-weight:700; font-family:var(--font-mono);" oninput="plEdSetQty(this.value)">
+      <button type="button" class="btn sm" onclick="plEdAdjQty(1)">+1</button>
+      <button type="button" class="btn sm" onclick="plEdAdjQty(10)">+10</button>
+      <button type="button" id="plEdFullBtn" class="btn sm soft-green" style="${d.target > 0 ? '' : 'display:none;'}" onclick="plEdSetQty(plDraft.target, true)">= Full (${d.target})</button>
     </div>
 
     <div class="stack" style="gap:6px;">
@@ -4198,35 +4324,63 @@ function renderPlEditorHtml(it) {
   </div>`;
 }
 
-function plEdSetStatus(st, target) {
+function plEdSyncVisuals() {
   if (!plDraft) return;
+  const ed = document.querySelector('.pl-editor');
+  if (!ed) return;
+  const pills = ed.querySelectorAll('.pl-st-pill');
+  if (pills[0]) pills[0].className = 'pl-st-pill' + (plDraft.status==='done' ? ' active-done' : '');
+  if (pills[1]) pills[1].className = 'pl-st-pill' + (plDraft.status==='partial' ? ' active-partial' : '');
+  if (pills[2]) pills[2].className = 'pl-st-pill' + (plDraft.status==='todo' ? ' active-todo' : '');
+  const fullBtn = document.getElementById('plEdFullBtn');
+  if (fullBtn) {
+    fullBtn.style.display = plDraft.target > 0 ? '' : 'none';
+    fullBtn.textContent = `= Full (${plDraft.target})`;
+  }
+  const leftEl = document.getElementById('plEdLeftNote');
+  if (leftEl) {
+    leftEl.textContent = plEdLeftText(plDraft.target, plDraft.doneQty);
+    leftEl.style.color = plDraft.target > 0 ? (plDraft.doneQty >= plDraft.target ? '#15803d' : '#b45309') : 'var(--muted)';
+  }
+}
+
+function plEdSetStatus(st) {
+  if (!plDraft) return;
+  const target = +plDraft.target || 0;
   plDraft.status = st;
   if (st === 'done' && target > 0 && (!plDraft.doneQty || plDraft.doneQty < target)) plDraft.doneQty = target;
   if (st === 'todo') plDraft.doneQty = 0;
   renderPlantListItems();
 }
-function plEdSetQty(val, target, rerender = false) {
+function plEdSetTarget(val, rerender = false) {
   if (!plDraft) return;
+  const t = Math.max(0, parseInt(val, 10) || 0);
+  plDraft.target = t;
+  const n = +plDraft.doneQty || 0;
+  if (t > 0 && n >= t) plDraft.status = 'done';
+  else if (n > 0) plDraft.status = 'partial';
+  else plDraft.status = 'todo';
+  if (rerender) renderPlantListItems();
+  else plEdSyncVisuals();
+}
+function plEdAdjTarget(delta) {
+  if (!plDraft) return;
+  plEdSetTarget((+plDraft.target || 0) + delta, true);
+}
+function plEdSetQty(val, rerender = false) {
+  if (!plDraft) return;
+  const target = +plDraft.target || 0;
   const n = Math.max(0, parseInt(val, 10) || 0);
   plDraft.doneQty = n;
   if (target > 0 && n >= target) plDraft.status = 'done';
   else if (n > 0) plDraft.status = 'partial';
   else plDraft.status = 'todo';
   if (rerender) renderPlantListItems();
-  else {
-    // Update status pills visually without losing focus in number box
-    const ed = document.querySelector('.pl-editor');
-    if (ed) {
-      const pills = ed.querySelectorAll('.pl-st-pill');
-      if (pills[0]) pills[0].className = 'pl-st-pill' + (plDraft.status==='done' ? ' active-done' : '');
-      if (pills[1]) pills[1].className = 'pl-st-pill' + (plDraft.status==='partial' ? ' active-partial' : '');
-      if (pills[2]) pills[2].className = 'pl-st-pill' + (plDraft.status==='todo' ? ' active-todo' : '');
-    }
-  }
+  else plEdSyncVisuals();
 }
-function plEdAdjQty(delta, target) {
+function plEdAdjQty(delta) {
   if (!plDraft) return;
-  plEdSetQty((plDraft.doneQty || 0) + delta, target, true);
+  plEdSetQty((+plDraft.doneQty || 0) + delta, true);
 }
 function plEdUpdatePlacement(idx, field, val) {
   if (!plDraft || !plDraft.placements[idx]) return;
@@ -4235,9 +4389,7 @@ function plEdUpdatePlacement(idx, field, val) {
     p.qty = Math.max(0, parseInt(val, 10) || 0);
     if (plDraft.placements.length > 1) {
       const sum = plDraft.placements.reduce((a, x) => a + (+x.qty || 0), 0);
-      const list = getActivePlantList();
-      const it = list?.items.find(x => x.id === plEditingId);
-      plEdSetQty(sum, it?.target || 0, true);
+      plEdSetQty(sum, true);
       return;
     }
   } else if (field === 'zone') {
@@ -4277,7 +4429,7 @@ function plEdRemovePlacement(idx) {
   plDraft.placements.splice(idx, 1);
   renderPlantListItems();
 }
-function plEdVoiceFill(target) {
+function plEdVoiceFill() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { toast('Voice recognition not supported here — use keyboard mic'); return; }
   const btn = document.getElementById('plVoiceBtn');
@@ -4288,6 +4440,7 @@ function plEdVoiceFill(target) {
   recog.onresult = e => {
     const t = String(e.results[0][0].transcript || '').trim();
     if (!plDraft) return;
+    const target = +plDraft.target || 0;
     const p = plDraft.placements[0] || (plDraft.placements[0] = { zone:'', bench:'', location:'', qty:0 });
     const loc = extractLocationFromText(t);
     if (loc.zone) p.zone = loc.zone;
@@ -4301,7 +4454,8 @@ function plEdVoiceFill(target) {
         .replace(/\b\d{1,2}\s*(?:left|right|middle|mid|[lmr])\b/ig, '')
         .replace(/\b(?:left|right|middle|mid)\s*\d{1,2}\b/ig, '');
       const nm = cleaned.match(/\b(\d+)\b/);
-      if (nm) plEdSetQty(parseInt(nm[1], 10), target, false);
+      if (/\brequired\b/i.test(t) && nm) plEdSetTarget(parseInt(nm[1], 10), false);
+      else if (nm) plEdSetQty(parseInt(nm[1], 10), false);
       else if (/\bdone\b/i.test(t)) { plDraft.status = 'done'; if (target > 0 && !plDraft.doneQty) plDraft.doneQty = target; }
     }
     renderPlantListItems();
@@ -4318,6 +4472,7 @@ function plEdSave(id, alsoSyncZone) {
   const cleanPlacements = plDraft.placements
     .map(p => ({ zone: String(p.zone || '').trim(), bench: String(p.bench || '').trim().toUpperCase(), location: String(p.location || '').trim(), qty: Math.max(0, +p.qty || 0) }))
     .filter(p => p.zone || p.bench || p.location);
+  it.target = Math.max(0, parseInt(plDraft.target, 10) || 0);
   it.status = plDraft.status;
   it.doneQty = Math.max(0, parseInt(plDraft.doneQty, 10) || 0);
   it.placements = cleanPlacements;
@@ -4444,11 +4599,11 @@ function exportPlantListXLSX() {
 
   // Sheet 1: 2-Line Tracked Format (Original line + Green Tick / Yellow Circle status line right beneath!)
   const s1Rows = [
-    { style: 1, cells: ['Plant Code / Status', 'Plant Description / Progress & Bench', 'Spec Code / Bench & Location', 'Target / Done', 'Min Qty / Left', 'Supplier / State', 'Plug Week / Updated', 'Order Status', 'Ordered Qty', 'Substitute'] }
+    { style: 1, cells: ['Plant Code / Status', 'Plant Description / Progress & Bench', 'Spec Code / Bench & Location', 'Required / Done', 'Min Qty / Left', 'Supplier / State', 'Plug Week / Updated', 'Order Status', 'Ordered Qty', 'Substitute'] }
   ];
   // Sheet 2: Flat Summary Table (1 row per plant for Excel filtering/sorting)
   const s2Rows = [
-    { style: 1, cells: ['Status', 'Plant Code', 'Plant Description', 'Spec Code', 'Target', 'Done', 'Remaining', 'Bench & Location', 'Notes', 'Plug Week', 'Supplier', 'Updated'] }
+    { style: 1, cells: ['Status', 'Plant Code', 'Plant Description', 'Spec Code', 'Required', 'Done', 'Left', 'Bench & Location', 'Notes', 'Plug Week', 'Supplier', 'Updated'] }
   ];
 
   items.forEach(it => {
@@ -4476,8 +4631,8 @@ function exportPlantListXLSX() {
     });
   });
 
-  const sheet1Xml = buildWorksheetXml(s1Rows, [20, 44, 30, 14, 14, 22, 16, 14, 14, 22]);
-  const sheet2Xml = buildWorksheetXml(s2Rows, [16, 16, 36, 26, 10, 10, 11, 30, 24, 12, 20, 13]);
+  const sheet1Xml = buildWorksheetXml(s1Rows, [20, 44, 30, 16, 14, 22, 16, 14, 14, 22]);
+  const sheet2Xml = buildWorksheetXml(s2Rows, [16, 16, 36, 26, 11, 10, 10, 30, 24, 12, 20, 13]);
 
   const blob = buildZipBlob([
     { name: '[Content_Types].xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },
@@ -4501,7 +4656,7 @@ function exportPlantListCSV() {
   const items = getFilteredPlantItems(list);
   if (!items.length) { toast('No rows to download'); return; }
   const rows = [
-    ['Plant Code / Status', 'Plant Description / Progress', 'Spec Code / Bench & Location', 'Target / Done', 'Min Qty / Left', 'Supplier / State', 'Plug Week / Updated', 'Notes']
+    ['Plant Code / Status', 'Plant Description / Progress', 'Spec Code / Bench & Location', 'Required / Done', 'Min Qty / Left', 'Supplier / State', 'Plug Week / Updated', 'Notes']
   ];
   items.forEach(it => {
     const st = plEffectiveStatus(it);
@@ -4520,15 +4675,19 @@ function printPlantList() {
   const list = getActivePlantList(); if (!list) return;
   const items = getFilteredPlantItems(list);
   const doneCnt = items.filter(it => plEffectiveStatus(it) === 'done').length;
+  const totReq = items.reduce((a, it) => a + (+it.target || 0), 0);
+  const totDone = items.reduce((a, it) => a + (+it.doneQty || 0), 0);
+  const totLeft = Math.max(0, totReq - totDone);
   const w = window.open('', '_blank');
   if (!w) { toast('Allow pop-ups to open print view'); return; }
   const rowsHtml = items.map(it => {
     const st = plEffectiveStatus(it);
     const locTxt = plPlacementsText(it);
+    const rem = Math.max(0, (+it.target || 0) - (+it.doneQty || 0));
     const cls = st === 'done' ? 'done' : (st === 'partial' ? 'part' : 'todo');
     const icon = st === 'done' ? '✅ DONE' : (st === 'partial' ? '🟡 IN PROGRESS' : '🟡 TO DO');
     return `<tr class="main-r"><td><strong>${esc(it.name)}</strong> ${it.code ? `<span class="cd">${esc(it.code)}</span>` : ''}</td><td>${esc(it.spec)}</td><td>${it.plugWeek ? 'Wk '+esc(it.plugWeek) : ''}</td><td style="text-align:right;font-weight:700;">${it.target || ''}</td></tr>
-      <tr class="sub-r ${cls}"><td colspan="4"><span class="st">${icon}</span> &nbsp; <strong>${it.doneQty || 0} / ${it.target || 0}</strong> &nbsp; · &nbsp; ${locTxt ? '📍 ' + esc(locTxt) : '<em>Bench &amp; location not set</em>'}${it.note ? ' &nbsp; — ' + esc(it.note) : ''}</td></tr>`;
+      <tr class="sub-r ${cls}"><td colspan="4"><span class="st">${icon}</span> &nbsp; <strong>${it.doneQty || 0} / ${it.target || 0}</strong>${rem > 0 ? ` (${rem} left)` : ''} &nbsp; · &nbsp; ${locTxt ? '📍 ' + esc(locTxt) : '<em>Bench &amp; location not set</em>'}${it.note ? ' &nbsp; — ' + esc(it.note) : ''}</td></tr>`;
   }).join('');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(list.name)} — Glasshouse Hub</title><style>
     body{font-family:-apple-system,Segoe UI,sans-serif;font-size:12px;color:#13201a;margin:18px;}
@@ -4539,8 +4698,8 @@ function printPlantList() {
     .st{font-weight:800;} @media print{body{margin:8px;}}
   </style></head><body>
     <h1>${esc(list.name)}</h1>
-    <div class="sub">Printed ${esc(todayISO())} · ${doneCnt} of ${items.length} lines done</div>
-    <table><thead><tr><th>Plant</th><th>Spec</th><th>Week</th><th style="text-align:right;">Target</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <div class="sub">Printed ${esc(todayISO())} · ${doneCnt} of ${items.length} lines done · Required: ${totReq.toLocaleString()} · Done: ${totDone.toLocaleString()} · Left: ${totLeft.toLocaleString()}</div>
+    <table><thead><tr><th>Plant</th><th>Spec</th><th>Week</th><th style="text-align:right;">Required</th></tr></thead><tbody>${rowsHtml}</tbody></table>
     <script>window.onload=()=>window.print();<\/script>
   </body></html>`);
   w.document.close();
