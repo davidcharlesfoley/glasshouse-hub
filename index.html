@@ -718,7 +718,8 @@
       <div class="panel">
         <div class="row" style="justify-content:space-between; margin-bottom:12px;">
           <h2>Production Counts</h2>
-          <div class="row">
+          <div class="row" style="gap:6px;">
+            <button type="button" class="btn sm soft-blue" onclick="openAiRawImport('production')">✨ AI Raw Import</button>
             <label class="btn sm primary" for="csvIn" style="cursor:pointer;">Upload CSV</label>
             <input type="file" id="csvIn" accept=".csv,.txt" style="display:none;" onchange="importProdCSV(event)">
             <button class="btn sm" onclick="exportProdCSV()">Export CSV</button>
@@ -1107,7 +1108,7 @@
     </div>
     <div class="live-ctx" id="liveCtx">Watching: Zone 9</div>
     <div class="live-feed" id="liveFeed">
-      <div class="msg ai"><div class="role">Live Agent</div>Tell me what to log or update — e.g. <em>"Mark Abutilon Ashford Red done on Zone 9 bench L front"</em>, <em>"Where is Begonia Dragon Wing?"</em>, <em>"List progress"</em>, or <em>"Watered Zone 9 bench R bottom"</em>.</div>
+      <div class="msg ai"><div class="role">Live Agent</div>Tell me what to log, paste raw data to fill your <strong>Production Counts</strong> or <strong>Plant Lists</strong> (e.g. <em>"Add to production list: Begonia Dragon Wing 150 Z9 14L, Wallflowers 100 Z8 7M"</em>), or say <em>"Mark Abutilon done Zone 9 bench 14L front"</em>.</div>
     </div>
     <div id="liveChips" class="live-chips" style="display:none;"></div>
     <div class="live-foot">
@@ -1116,8 +1117,8 @@
         <button class="btn sm" id="liveMicBtn" onclick="toggleMic('liveIn','liveMicBtn', sendLive)">🎤 Talk</button>
         <button class="btn sm voice-on" id="liveVoiceBtn" type="button" onclick="toggleVoiceReply()" title="Toggle spoken AI replies">🔊 Voice On</button>
       </div>
-      <div class="row" style="flex-wrap:nowrap;">
-        <input type="text" id="liveIn" placeholder="Speak or type..." style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault(); sendLive();}">
+      <div class="row" style="flex-wrap:nowrap; align-items:flex-end;">
+        <textarea id="liveIn" rows="2" placeholder="Speak, type, or paste raw plant data..." style="flex:1; min-height:42px; max-height:130px; padding:7px 9px; font-size:13px;" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault(); sendLive();}"></textarea>
         <button class="btn primary" onclick="sendLive()">Send</button>
       </div>
     </div>
@@ -2087,19 +2088,23 @@ function extractLocationFromText(q) {
     if (ez) zone = ez;
   }
   const zn = parseInt(zone, 10) || 9;
+  const maxB = /^\d+$/.test(zone) ? (zoneDefs[zn]?.maxBench || 0) : 25;
+  const afterZone = zm ? q.slice(zm.index + zm[0].length) : q;
   const qNoZone = q.replace(/\bzone\s*\d{1,2}\b/ig, ' ').replace(/\bz\d{1,2}\b/ig, ' ');
+
   const bmFull = qNoZone.match(/\bbench\s+(\d{1,2}\s*(?:left|right|middle|mid|[lmr])|(?:left|right|middle|mid|[lmr])\s*\d{1,2}|\d{1,2}|left|right|middle|mid|[a-z0-9]+)\b/i);
   if (bmFull) {
     bench = normBench(zn, bmFull[1]);
   } else {
-    const numSide = qNoZone.match(/\b(\d{1,2})\s*(left|right|middle|mid|[lmr])\b/i);
-    const sideNum = qNoZone.match(/\b(left|right|middle|mid)\s*(\d{1,2})\b/i);
-    if (numSide && parseInt(numSide[1], 10) <= 25) {
+    const scope = zm ? afterZone : qNoZone;
+    const numSide = scope.match(/\b(\d{1,2})\s*(left|right|middle|mid|[lmr])\b/i);
+    const sideNum = scope.match(/\b(left|right|middle|mid)\s*(\d{1,2})\b/i);
+    if (maxB > 0 && numSide && parseInt(numSide[1], 10) <= maxB) {
       bench = normBench(zn, numSide[1] + ' ' + numSide[2]);
-    } else if (sideNum && parseInt(sideNum[2], 10) <= 25) {
+    } else if (maxB > 0 && sideNum && parseInt(sideNum[2], 10) <= maxB) {
       bench = normBench(zn, sideNum[2] + ' ' + sideNum[1]);
-    } else if (zone && /\b(left|right|middle)\b/i.test(qNoZone)) {
-      const sm = qNoZone.match(/\b(left|right|middle)\b/i);
+    } else if (zone && /\b(left|right|middle)\b/i.test(scope)) {
+      const sm = scope.match(/\b(left|right|middle)\b/i);
       if (sm) bench = normBench(zn, sm[1]);
     }
   }
@@ -2369,69 +2374,352 @@ function appendAiMsg(feed, role, htmlBody, spokenText) {
   return d;
 }
 
+let lastAiRawBatch = [];
+
+function parseRawPlantLine(line, defZone) {
+  let s = String(line || '').trim().replace(/^[-•*▪︎▸\d.)]+\s+/, '').trim();
+  if (!s || s.length < 2) return null;
+  if (/^(plant\s*code|variety|plant\s*description|crop|item)\b/i.test(s) && /\b(total|target|qty|quantity|bench|zone)\b/i.test(s)) return null;
+
+  // Handle tab-separated or CSV-style rows first (e.g. "Wallflowers Sunset\t9\t14L\t100" or "Begonia, FP11, 150, Z8 7M")
+  const parts = s.includes('\t') ? s.split('\t').map(x => x.trim()).filter(Boolean) : null;
+  if (parts && parts.length >= 2) {
+    const loc = extractLocationFromText(s);
+    let name = parts[0], spec = '', target = 0, actual = 0;
+    for (let i = 1; i < parts.length; i++) {
+      const p = parts[i];
+      if (/^(?:FP\d+|\d+L|\d+CM)$/i.test(p) && !spec) spec = p.toUpperCase();
+      else if (/^\d+\s*\/\s*\d+$/.test(p)) { const sp = p.split('/'); actual = +sp[0]||0; target = +sp[1]||0; }
+      else if (/^\d+$/.test(p) && !target && !/^zone\s*/i.test(parts[i-1]||'')) target = parseInt(p, 10);
+    }
+    const z = /^\d+$/.test(loc.zone) ? parseInt(loc.zone, 10) : defZone;
+    const b = loc.bench || (parts.find(p => /^\d{0,2}[LMR]$/i.test(p)) || '').toUpperCase();
+    if (!name || /^\d+$/.test(name)) return null;
+    return { name, spec, target, actual, zone: z, bench: normBench(z, b), location: loc.location || '', done: actual > 0 && actual >= target && target > 0 };
+  }
+
+  const loc = extractLocationFromText(s);
+  const z = /^\d+$/.test(loc.zone) ? parseInt(loc.zone, 10) : defZone;
+  const b = loc.bench || '';
+
+  let spec = '';
+  const specM = s.match(/\b(FP\d+|\d+(?:\.\d+)?L|\d+\s*cm)\b/i);
+  if (specM) spec = specM[1].replace(/\s+/g, '').toUpperCase();
+
+  let actual = 0, target = 0;
+  const isDone = /\b(done|finished|complete|completed)\b/i.test(s);
+  const slashM = s.match(/\b(\d+)\s*\/\s*(\d+)\b/);
+  let cleaned = s
+    .replace(/\bzone\s*\d{1,2}\b/ig, ' ')
+    .replace(/\bz\d{1,2}\b/ig, ' ')
+    .replace(/\bbench\s+(?:\d{1,2}\s*(?:left|right|middle|mid|[lmr])|(?:left|right|middle|mid|[lmr])\s*\d{1,2}|[a-z0-9]+)\b/ig, ' ')
+    .replace(/\b\d{1,2}\s*(?:left|right|middle|mid|[lmr])\b/ig, ' ')
+    .replace(/\b(?:left|right|middle|mid)\s*\d{1,2}\b/ig, ' ')
+    .replace(/\b(?:front|middle|back|north\s+end|south\s+end|under\s+bench|hanging|outside|cold\s+frame|tunnel|standing\s+out)\b/ig, ' ')
+    .replace(/\bbay\s*\d+\b/ig, ' ')
+    .replace(/\b(?:plug\s*)?week\s*\d{1,2}\b/ig, ' ');
+  if (b) cleaned = cleaned.replace(/\b(left|right|middle|mid)\b/ig, ' ');
+
+  if (specM) cleaned = cleaned.replace(new RegExp(`\\b${specM[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'), ' ');
+
+  if (slashM) {
+    actual = parseInt(slashM[1], 10) || 0;
+    target = parseInt(slashM[2], 10) || 0;
+    cleaned = cleaned.replace(slashM[0], ' ');
+  } else {
+    const nums = cleaned.match(/\b\d+\b/g) || [];
+    if (nums.length >= 1) {
+      target = parseInt(nums[0], 10) || 0;
+      if (isDone) actual = target;
+      cleaned = cleaned.replace(new RegExp(`\\b${nums[0]}\\b`), ' ');
+    }
+  }
+
+  let name = cleaned
+    .replace(/\b(trays?|pots?|plugs?|units?|x|done|finished|complete|completed|on|in|at|for|to|of)\b/ig, ' ')
+    .replace(/[\-|:,;()]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!name || name.length < 2 || /^\d+$/.test(name)) return null;
+  return { name, spec, target, actual, zone: z, bench: normBench(z, b), location: loc.location || '', done: isDone || (target > 0 && actual >= target) };
+}
+
+function parseRawPlantEntries(rawText) {
+  let body = String(rawText || '').trim();
+  // Strip leading command phrase if present
+  body = body.replace(/^(?:please\s+)?(?:add|put|import|fill|load|paste|create|enter|log)(?:\s+(?:this|these|raw\s+data|data|lines?))?(?:\s+(?:to|into|in|on))?\s+(?:my\s+|the\s+)?(?:production\s*(?:list|counts?)?|counts?\s*list?|plant\s*lists?|both)\s*[:\-–—]?\s*/i, '').trim();
+  if (!body) return [];
+
+  const rawLines = body.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  let chunks = [];
+  if (rawLines.length >= 2) {
+    chunks = rawLines;
+  } else {
+    // Single line: split on semicolons, or commas if each chunk looks like a separate plant+number item
+    if (body.includes(';')) chunks = body.split(';').map(x => x.trim()).filter(Boolean);
+    else {
+      const commaParts = body.split(',').map(x => x.trim()).filter(Boolean);
+      const numParts = commaParts.filter(p => /\d/.test(p) && /[a-z]{2,}/i.test(p));
+      chunks = (commaParts.length >= 2 && numParts.length >= 2) ? commaParts : [body];
+    }
+  }
+  const out = [];
+  chunks.forEach(c => {
+    const parsed = parseRawPlantLine(c, currentZone);
+    if (parsed) out.push(parsed);
+  });
+  return out;
+}
+
+function commitRawEntries(entries, dest = 'production', listTitle = '') {
+  if (!entries || !entries.length) return [];
+  const now = new Date().toLocaleString('en-GB'), d = todayISO(), ts = Date.now();
+  lastAiRawBatch = entries;
+  const summary = [];
+  pushUndo(`AI import ${entries.length} ${dest === 'plantlist' ? 'plant list' : 'production'} line${entries.length===1?'':'s'}`);
+
+  if (dest === 'production' || dest === 'both') {
+    entries.slice().reverse().forEach((e, i) => {
+      const z = Math.min(12, Math.max(1, parseInt(e.zone, 10) || currentZone));
+      const b = normBench(z, e.bench || '') || zoneDefs[z].letters[0] || 'L';
+      const label = e.spec ? `${e.name} (${e.spec})` : e.name;
+      const item = {
+        id: 'prd_' + (ts + i),
+        variety: label,
+        zone: z,
+        bench: b,
+        target: Math.max(0, +e.target || 0),
+        actual: Math.max(0, +e.actual || 0),
+        date: d,
+        updatedAt: now,
+        timestamp: ts + i
+      };
+      appState.productionList.unshift(item);
+      selectedProdId = item.id;
+      summary.push(`📦 ${label} · Z${z}${b ? ' ' + b : ''} (Target ${item.target}${item.actual ? ', Done ' + item.actual : ''})`);
+    });
+  }
+
+  if (dest === 'plantlist' || dest === 'both') {
+    let list = listTitle ? null : getActivePlantList();
+    if (!list) {
+      list = { id: 'pl_' + ts, name: listTitle || `AI Imported List (${d})`, sourceFile: 'ai-raw', importedAt: d, items: [] };
+      appState.plantLists.unshift(list);
+      appState.activeListId = list.id;
+    }
+    entries.slice().reverse().forEach((e, i) => {
+      const target = Math.max(0, +e.target || 0);
+      const doneQty = Math.max(0, +e.actual || 0);
+      const st = e.done || (target > 0 && doneQty >= target) ? 'done' : (doneQty > 0 ? 'partial' : 'todo');
+      const placements = (e.zone || e.bench || e.location)
+        ? [{ zone: String(e.zone || ''), bench: normBench(parseInt(e.zone,10)||9, e.bench || ''), location: e.location || '', qty: doneQty || target }]
+        : [];
+      list.items.unshift({
+        id: 'pli_' + (ts + i),
+        code: e.code || '',
+        name: e.name,
+        spec: e.spec || '',
+        target,
+        minQty: '',
+        orderedQty: '',
+        supplier: e.supplier || '',
+        plugWeek: e.plugWeek || '',
+        orderStatus: '',
+        substitute: '',
+        status: st,
+        doneQty: st === 'done' && !doneQty && target > 0 ? target : doneQty,
+        placements,
+        note: e.note || '',
+        updatedDate: st === 'todo' && !placements.length ? '' : d
+      });
+      if (dest === 'plantlist') {
+        summary.push(`${st==='done'?'✅':'🟡'} ${e.name} (${doneQty}/${target}${placements.length ? ' · ' + plFormatPlacement(placements[0]) : ''})`);
+      }
+    });
+  }
+
+  saveState(true);
+  renderAll();
+  return summary;
+}
+
+function copyLastAiBatchTo(dest) {
+  if (!lastAiRawBatch.length) { toast('No recent AI import to copy'); return; }
+  const lines = commitRawEntries(lastAiRawBatch, dest);
+  toast(`Copied ${lines.length} line${lines.length===1?'':'s'} to ${dest === 'plantlist' ? 'Plant Lists' : 'Production Counts'}!`);
+}
+
+function openAiRawImport(dest = 'production') {
+  toggleLiveDrawer(true);
+  const inp = document.getElementById('liveIn');
+  if (!inp) return;
+  inp.value = dest === 'plantlist' ? 'Add to plant list:\n' : 'Add to production list:\n';
+  inp.focus();
+  inp.setSelectionRange(inp.value.length, inp.value.length);
+}
+
+function quickRawImportCommand(q) {
+  const ql = q.toLowerCase().trim();
+  const explicitProd = /\b(add|put|fill|import|load|paste|enter)\b[\s\S]{0,30}\b(production|counts?)\b/i.test(ql);
+  const explicitPl = /\b(add|put|fill|import|load|paste|create|new)\b[\s\S]{0,30}\b(plant\s*list)\b/i.test(ql);
+  const explicitBoth = explicitProd && explicitPl || /\b(fill|add|import)\s+both\b/i.test(ql);
+  const isMultiLine = q.trim().split(/\r?\n/).filter(x => x.trim()).length >= 2;
+
+  if (!explicitProd && !explicitPl && !explicitBoth && !isMultiLine) return null;
+
+  // If it looks like a long prose email and Gemini key is set, let Gemini parse it intelligently!
+  const looksLikeProse = !isMultiLine && q.length > 180 && !/[,;\t]/.test(q);
+  if (looksLikeProse && appConfig.geminiKey) return null;
+
+  const entries = parseRawPlantEntries(q);
+  // For implicit multi-line pastes (no explicit keyword), require at least 2 entries with numbers
+  const validNumCount = entries.filter(e => e.target > 0 || e.actual > 0 || e.bench).length;
+  if (!entries.length) return null;
+  if (!explicitProd && !explicitPl && !explicitBoth && (entries.length < 2 || validNumCount < 2)) return null;
+
+  let dest = 'production';
+  if (explicitBoth) dest = 'both';
+  else if (explicitPl) dest = 'plantlist';
+  else if (explicitProd) dest = 'production';
+  else dest = currentTab === 'lists' ? 'plantlist' : 'production';
+
+  const summary = commitRawEntries(entries, dest);
+  const destLbl = dest === 'both' ? 'Production Counts & Plant Lists' : (dest === 'plantlist' ? 'Plant Lists' : 'Production Counts');
+  const otherDest = dest === 'plantlist' ? 'production' : 'plantlist';
+  const otherLbl = dest === 'plantlist' ? '+ Also copy to Production Counts' : '+ Also copy to Plant Lists';
+  const preview = summary.slice(0, 6).map(x => esc(x)).join('<br>') + (summary.length > 6 ? `<br>…and ${summary.length - 6} more` : '');
+  const html = `Added <strong>${entries.length}</strong> line${entries.length===1?'':'s'} to <strong>${destLbl}</strong>:<div class="ai-act-badge">${preview}</div><div class="row" style="margin-top:7px; gap:6px;">${dest !== 'both' ? `<button type="button" class="btn sm soft-blue" onclick="copyLastAiBatchTo('${otherDest}')">${otherLbl}</button>` : ''}<button type="button" class="btn sm ghost" onclick="undoLast()">↩ Undo</button></div>`;
+  const spoken = `Added ${entries.length} ${entries.length===1?'line':'lines'} to your ${destLbl}.`;
+  return { html, spoken };
+}
+
 function buildPlantListAiContext(q) {
   const list = getActivePlantList();
-  if (!list || !list.items.length) return '';
-  let done = 0, part = 0, todo = 0;
-  list.items.forEach(it => { const s = plEffectiveStatus(it); if (s==='done') done++; else if (s==='partial') part++; else todo++; });
-  const matched = findPlantListMatches(q, list);
-  const recent = list.items.filter(it => plEffectiveStatus(it) !== 'todo').slice(0, 15);
-  const head = list.items.slice(0, 15);
-  const picked = [];
-  const seen = new Set();
-  [...matched, ...recent, ...head].forEach(it => {
-    if (!seen.has(it.id) && picked.length < 40) { seen.add(it.id); picked.push(it); }
-  });
-  const lines = picked.map(it => {
-    const st = plEffectiveStatus(it);
-    const loc = plPlacementsText(it) || 'unplaced';
-    return `- [${it.code || '-'}] ${it.name} (${it.spec || ''}) | Need:${it.target} | Done:${it.doneQty||0} | Status:${st} | Loc:${loc}${it.plugWeek ? ' | Wk:'+it.plugWeek : ''}${it.note ? ' | Note:'+it.note : ''}`;
-  }).join('\n');
-  return `\nActive Plant List: "${list.name}" (${list.items.length} total: ${done} done, ${part} in progress, ${todo} to do).\nRelevant Plant List rows:\n${lines}\nIf the user asks you to update, mark done, move, or split any Plant List items, append this exact JSON block at the very end of your reply:\n<ACTION>{"updates":[{"match":"exact plant name or code","status":"done|partial|todo","doneQty":48,"placements":[{"zone":"9","bench":"L","location":"Front","qty":48}],"note":""}]}</ACTION>`;
+  const prodSample = (appState.productionList || []).slice(0, 15).map(p => `- ${p.variety} | Z${p.zone} Bench ${p.bench||'Gen'} | ${p.actual}/${p.target}`).join('\n');
+  let plBlock = '';
+  if (list && list.items.length) {
+    let done = 0, part = 0, todo = 0;
+    list.items.forEach(it => { const s = plEffectiveStatus(it); if (s==='done') done++; else if (s==='partial') part++; else todo++; });
+    const matched = findPlantListMatches(q, list);
+    const recent = list.items.filter(it => plEffectiveStatus(it) !== 'todo').slice(0, 15);
+    const head = list.items.slice(0, 15);
+    const picked = [];
+    const seen = new Set();
+    [...matched, ...recent, ...head].forEach(it => {
+      if (!seen.has(it.id) && picked.length < 40) { seen.add(it.id); picked.push(it); }
+    });
+    const lines = picked.map(it => {
+      const st = plEffectiveStatus(it);
+      const loc = plPlacementsText(it) || 'unplaced';
+      return `- [${it.code || '-'}] ${it.name} (${it.spec || ''}) | Need:${it.target} | Done:${it.doneQty||0} | Status:${st} | Loc:${loc}${it.plugWeek ? ' | Wk:'+it.plugWeek : ''}${it.note ? ' | Note:'+it.note : ''}`;
+    }).join('\n');
+    plBlock = `\nActive Plant List: "${list.name}" (${list.items.length} total: ${done} done, ${part} in progress, ${todo} to do).\nRelevant Plant List rows:\n${lines}`;
+  }
+  return `\nGlasshouse Bench Layout: Zones 1–2 are Left/Right (L/R). Zones 3–7 & 9–12 are Benches 1–25 Left/Right (e.g. 14L, 25R). Zone 8 is Benches 1–15 Left/Middle/Right (e.g. 7M).
+Current Production Counts (${(appState.productionList||[]).length} lines):\n${prodSample || '(empty)'}${plBlock}
+If the user asks to update Plant List items OR gives raw plant data to add to Production Counts or Plant Lists, append this exact JSON block at the very end of your reply:
+<ACTION>{"updates":[{"match":"plant name or code","status":"done|partial|todo","doneQty":48,"placements":[{"zone":"9","bench":"14L","location":"Front","qty":48}],"note":""}],"addProduction":[{"variety":"Plant Name (FP11)","zone":9,"bench":"14L","target":150,"actual":0}],"addPlantList":{"listName":"","items":[{"name":"Plant Name","spec":"FP11","target":150,"doneQty":0,"status":"todo","placements":[{"zone":"9","bench":"14L","location":"Front","qty":150}],"plugWeek":"","supplier":"","note":""}]}}</ACTION>
+Include only the keys needed (updates, addProduction, and/or addPlantList).`;
 }
 
 function applyAiPlantListActions(rawText) {
   const m = String(rawText || '').match(/<ACTION>([\s\S]*?)<\/ACTION>/i);
   if (!m) return { cleanText: rawText, applied: [] };
   const cleanText = String(rawText || '').replace(/<ACTION>[\s\S]*?<\/ACTION>/ig, '').trim();
-  const list = getActivePlantList();
-  if (!list || !list.items.length) return { cleanText, applied: [] };
   const applied = [];
   try {
     const data = JSON.parse(m[1].trim());
     const updates = Array.isArray(data?.updates) ? data.updates : (Array.isArray(data) ? data : []);
-    if (!updates.length) return { cleanText, applied: [] };
-    pushUndo(`AI update ${updates.length} list item${updates.length===1?'':'s'}`);
-    updates.forEach(u => {
-      const hits = findPlantListMatches(u.match || u.name || u.code || '', list);
-      if (!hits.length) return;
-      const it = hits[0];
-      if (typeof u.doneQty === 'number' && !isNaN(u.doneQty)) it.doneQty = Math.max(0, Math.round(u.doneQty));
-      if (['done','partial','todo'].includes(u.status)) {
-        it.status = u.status;
-        if (u.status === 'done' && it.target > 0 && (!it.doneQty || it.doneQty < it.target)) it.doneQty = it.target;
-        if (u.status === 'todo') it.doneQty = 0;
-      } else if (typeof u.doneQty === 'number') {
-        it.status = (it.target > 0 && it.doneQty >= it.target) ? 'done' : (it.doneQty > 0 ? 'partial' : 'todo');
+    const addProd = Array.isArray(data?.addProduction) ? data.addProduction : [];
+    const addPlRaw = data?.addPlantList;
+    const addPlItems = Array.isArray(addPlRaw) ? addPlRaw : (Array.isArray(addPlRaw?.items) ? addPlRaw.items : []);
+    const addPlName = (!Array.isArray(addPlRaw) && addPlRaw?.listName) ? String(addPlRaw.listName).trim() : '';
+
+    if (!updates.length && !addProd.length && !addPlItems.length) return { cleanText, applied: [] };
+    pushUndo('AI dashboard update');
+
+    // 1. Update existing Plant List items
+    const list = getActivePlantList();
+    if (updates.length && list && list.items.length) {
+      updates.forEach(u => {
+        const hits = findPlantListMatches(u.match || u.name || u.code || '', list);
+        if (!hits.length) return;
+        const it = hits[0];
+        if (typeof u.doneQty === 'number' && !isNaN(u.doneQty)) it.doneQty = Math.max(0, Math.round(u.doneQty));
+        if (['done','partial','todo'].includes(u.status)) {
+          it.status = u.status;
+          if (u.status === 'done' && it.target > 0 && (!it.doneQty || it.doneQty < it.target)) it.doneQty = it.target;
+          if (u.status === 'todo') it.doneQty = 0;
+        } else if (typeof u.doneQty === 'number') {
+          it.status = (it.target > 0 && it.doneQty >= it.target) ? 'done' : (it.doneQty > 0 ? 'partial' : 'todo');
+        }
+        if (Array.isArray(u.placements) && u.placements.length) {
+          const cleanP = u.placements.map(p => ({
+            zone: String(p.zone ?? '').replace(/^zone\s*/i, '').trim(),
+            bench: normBench(parseInt(p.zone, 10) || 9, String(p.bench ?? '')),
+            location: String(p.location ?? '').trim(),
+            qty: Math.max(0, parseInt(p.qty, 10) || 0)
+          })).filter(p => p.zone || p.bench || p.location);
+          if (cleanP.length) {
+            it.placements = cleanP;
+            if (cleanP[0].zone) plLastLoc = { zone: cleanP[0].zone, bench: cleanP[0].bench, location: cleanP[0].location };
+          }
+        }
+        if (u.note !== undefined && u.note !== null && String(u.note).trim()) it.note = String(u.note).trim();
+        it.updatedDate = todayISO();
+        const st = plEffectiveStatus(it);
+        applied.push(`${st==='done'?'✅':'🟡'} ${it.name} (${it.doneQty||0}/${it.target}${plPlacementsText(it)?' · '+plPlacementsText(it):''})`);
+      });
+    }
+
+    // 2. Bulk-add to Production Counts
+    if (addProd.length) {
+      const now = new Date().toLocaleString('en-GB'), d = todayISO(), ts = Date.now();
+      addProd.slice().reverse().forEach((p, i) => {
+        const name = String(p.variety || p.name || '').trim(); if (!name) return;
+        const z = Math.min(12, Math.max(1, parseInt(String(p.zone ?? currentZone).replace(/\D/g, ''), 10) || currentZone));
+        const b = normBench(z, p.bench || '') || zoneDefs[z].letters[0] || 'L';
+        const target = Math.max(0, parseInt(p.target, 10) || 0);
+        const actual = Math.max(0, parseInt(p.actual ?? p.doneQty, 10) || 0);
+        const item = { id: 'prd_' + (ts + i), variety: name, zone: z, bench: b, target, actual, date: d, updatedAt: now, timestamp: ts + i };
+        appState.productionList.unshift(item);
+        selectedProdId = item.id;
+        applied.push(`📦 Production: ${name} · Z${z} ${b} (${actual}/${target})`);
+      });
+    }
+
+    // 3. Bulk-add to Plant Lists
+    if (addPlItems.length) {
+      const d = todayISO(), ts = Date.now();
+      let targetList = addPlName ? null : getActivePlantList();
+      if (!targetList) {
+        targetList = { id: 'pl_' + ts, name: addPlName || `AI Imported List (${d})`, sourceFile: 'ai', importedAt: d, items: [] };
+        appState.plantLists.unshift(targetList);
+        appState.activeListId = targetList.id;
       }
-      if (Array.isArray(u.placements) && u.placements.length) {
-        const cleanP = u.placements.map(p => ({
+      addPlItems.slice().reverse().forEach((x, i) => {
+        const name = String(x.name || x.variety || '').trim(); if (!name) return;
+        const target = Math.max(0, parseInt(x.target, 10) || 0);
+        const doneQty = Math.max(0, parseInt(x.doneQty ?? x.actual, 10) || 0);
+        const st = ['done','partial','todo'].includes(x.status) ? x.status : (target > 0 && doneQty >= target ? 'done' : (doneQty > 0 ? 'partial' : 'todo'));
+        const placements = Array.isArray(x.placements) ? x.placements.map(p => ({
           zone: String(p.zone ?? '').replace(/^zone\s*/i, '').trim(),
-          bench: String(p.bench ?? '').replace(/^bench\s*/i, '').trim().toUpperCase(),
+          bench: normBench(parseInt(p.zone, 10) || 9, String(p.bench ?? '')),
           location: String(p.location ?? '').trim(),
           qty: Math.max(0, parseInt(p.qty, 10) || 0)
-        })).filter(p => p.zone || p.bench || p.location);
-        if (cleanP.length) {
-          it.placements = cleanP;
-          if (cleanP[0].zone) plLastLoc = { zone: cleanP[0].zone, bench: cleanP[0].bench, location: cleanP[0].location };
-        }
-      }
-      if (u.note !== undefined && u.note !== null && String(u.note).trim()) it.note = String(u.note).trim();
-      it.updatedDate = todayISO();
-      const st = plEffectiveStatus(it);
-      applied.push(`${st==='done'?'✅':'🟡'} ${it.name} (${it.doneQty||0}/${it.target}${plPlacementsText(it)?' · '+plPlacementsText(it):''})`);
-    });
-    if (applied.length) { saveState(true); renderPlantLists(); }
+        })).filter(p => p.zone || p.bench || p.location) : [];
+        targetList.items.unshift({
+          id: 'pli_' + (ts + i), code: String(x.code || '').trim(), name, spec: String(x.spec || '').trim(),
+          target, minQty: '', orderedQty: '', supplier: String(x.supplier || '').trim(), plugWeek: String(x.plugWeek || '').trim(),
+          orderStatus: '', substitute: '', status: st, doneQty: st === 'done' && !doneQty && target > 0 ? target : doneQty,
+          placements, note: String(x.note || '').trim(), updatedDate: st === 'todo' && !placements.length ? '' : d
+        });
+        applied.push(`${st==='done'?'✅':'🟡'} List: ${name} (${doneQty}/${target}${placements.length ? ' · ' + plFormatPlacement(placements[0]) : ''})`);
+      });
+    }
+
+    if (applied.length) { saveState(true); renderAll(); }
   } catch (e) {}
   return { cleanText, applied };
 }
@@ -2440,6 +2728,12 @@ async function runChat(q, feedId) {
   primeSpeech();
   const feed = document.getElementById(feedId);
   appendUserMsg(feed, q);
+  const rawActed = quickRawImportCommand(q);
+  if (rawActed) {
+    appendAiMsg(feed, 'Hub Action', rawActed.html, rawActed.spoken);
+    speakText(rawActed.spoken);
+    return;
+  }
   const acted = quickLocalCommand(q);
   if (acted) {
     const html = esc(acted).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
@@ -2452,14 +2746,14 @@ async function runChat(q, feedId) {
     if (currentTab === 'lists' && list && list.items.length) {
       let done = 0, part = 0, todo = 0;
       list.items.forEach(it => { const s = plEffectiveStatus(it); if (s==='done') done++; else if (s==='partial') part++; else todo++; });
-      const msg = `${list.name}: ${done} of ${list.items.length} done (${part} in progress, ${todo} to do). Try saying "Mark [plant] done on Zone 9 bench L front", "Where is [plant]?", or add your Gemini key in Settings for full AI chat.`;
+      const msg = `${list.name}: ${done} of ${list.items.length} done (${part} in progress, ${todo} to do). Paste raw lines to import, or say "Mark [plant] done on Zone 9 bench 14L front".`;
       appendAiMsg(feed, 'Local Hub', esc(msg), msg);
       speakText(msg);
       return;
     }
     const items = collectAll('ALL','','ALL').slice(0,12);
-    const ans = items.length ? items.map(e => `• ${e.date} Z${e.zone} ${e.bench?'Bench '+e.bench:''}: ${e.text}`).join('<br>') : 'No bench entries logged yet. Add a Gemini key in Settings for full AI chat.';
-    const spoken = items.length ? `Here are your latest ${Math.min(items.length, 3)} entries. ` + items.slice(0,3).map(e => `Zone ${e.zone} ${e.bench?'Bench '+e.bench:''}: ${e.text}`).join('. ') : 'No bench entries logged yet. Add your Gemini API key in Settings for full AI chat.';
+    const ans = items.length ? items.map(e => `• ${e.date} Z${e.zone} ${e.bench?'Bench '+e.bench:''}: ${e.text}`).join('<br>') : 'No bench entries logged yet. Paste raw plant lines to fill Production Counts, or add a Gemini key in Settings for full AI chat.';
+    const spoken = items.length ? `Here are your latest ${Math.min(items.length, 3)} entries. ` + items.slice(0,3).map(e => `Zone ${e.zone} ${e.bench?'Bench '+e.bench:''}: ${e.text}`).join('. ') : 'No bench entries logged yet. Paste raw lines to fill Production Counts or add your Gemini API key in Settings.';
     appendAiMsg(feed, 'Local Hub', ans, spoken);
     speakText(spoken);
     return;
@@ -2475,8 +2769,8 @@ async function runChat(q, feedId) {
     const { text } = await callGemini([{ text: `You are a concise UK glasshouse assistant. Keep answers brief, clear, and natural for spoken voice replies (avoid markdown formatting). Active view: ${currentTab}. Active zone: Zone ${currentZone}.\nCurrent logs:\n${ctx}${plCtx}\n\nQuestion: ${q}` }]);
     thinking.remove();
     const { cleanText, applied } = applyAiPlantListActions(text);
-    const bodyText = cleanText || (applied.length ? `Updated ${applied.length} item${applied.length===1?'':'s'} on your Plant List.` : text);
-    const badgeHtml = applied.length ? `<div class="ai-act-badge">✓ Updated Plant List:<br>${applied.map(a => esc(a)).join('<br>')}</div>` : '';
+    const bodyText = cleanText || (applied.length ? `Updated ${applied.length} item${applied.length===1?'':'s'} on your dashboard.` : text);
+    const badgeHtml = applied.length ? `<div class="ai-act-badge">✓ Dashboard Updated:<br>${applied.map(a => esc(a)).join('<br>')}</div><div class="row" style="margin-top:6px;"><button type="button" class="btn sm ghost" onclick="undoLast()">↩ Undo</button></div>` : '';
     appendAiMsg(feed, 'Gemini AI', esc(bodyText).replace(/\n/g,'<br>') + badgeHtml, bodyText);
     speakText(bodyText);
   } catch (e) {
@@ -2507,6 +2801,8 @@ function updateLiveCtx() {
     if (currentTab === 'lists' && list) {
       const d = list.items.filter(it => plEffectiveStatus(it) === 'done').length;
       el.textContent = `Watching: Plant Lists · ${list.name} (${d}/${list.items.length} done)`;
+    } else if (currentTab === 'counts') {
+      el.textContent = `Watching: Production Counts · ${(appState.productionList||[]).length} lines`;
     } else if (list && list.items.length) {
       const d = list.items.filter(it => plEffectiveStatus(it) === 'done').length;
       el.textContent = `Watching: Zone ${currentZone} · ${activeBenchesMap(currentZone).size} benches · List ${d}/${list.items.length}`;
@@ -2515,16 +2811,19 @@ function updateLiveCtx() {
     }
   }
   if (chips) {
+    chips.style.display = 'flex';
+    const baseChip = `<button type="button" class="live-chip" onclick="useLiveChip('Add to production list:\\n', false)">📋 Raw → Production</button>`;
     if (list && list.items.length) {
-      chips.style.display = 'flex';
       const sampleName = list.items[0]?.name || 'plant';
-      chips.innerHTML = `
-        <button type="button" class="live-chip" onclick="useLiveChip('List progress', true)">📊 List progress</button>
+      chips.innerHTML = baseChip + `
+        <button type="button" class="live-chip" onclick="useLiveChip('List progress', true)">📊 Progress</button>
         <button type="button" class="live-chip" onclick="useLiveChip('Where is ', false)">🔍 Where is…</button>
-        <button type="button" class="live-chip" onclick="useLiveChip('Mark ${esc(sampleName).replace(/'/g, '')} done on Zone ${currentZone} bench L front', false)">✅ Mark done…</button>
+        <button type="button" class="live-chip" onclick="useLiveChip('Mark ${esc(sampleName).replace(/'/g, '')} done on Zone ${currentZone} bench 1L front', false)">✅ Mark done…</button>
       `;
     } else {
-      chips.style.display = 'none';
+      chips.innerHTML = baseChip + `
+        <button type="button" class="live-chip" onclick="useLiveChip('Add to plant list:\\n', false)">🌿 Raw → Plant List</button>
+      `;
     }
   }
 }
