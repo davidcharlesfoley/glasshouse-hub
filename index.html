@@ -359,6 +359,32 @@
     background: var(--blue-light); color: var(--blue); border: 1px solid var(--blue-border);
     font-family: var(--font-mono);
   }
+  .pl-steps {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 640px) { .pl-steps { grid-template-columns: 1fr; } }
+  .pl-step {
+    display: flex; align-items: center; gap: 9px; padding: 9px 11px;
+    border-radius: 11px; border: 1px solid var(--border); background: #fff;
+    cursor: pointer; text-align: left; font-family: inherit; transition: border-color 0.14s, background 0.14s;
+  }
+  .pl-step:hover { border-color: var(--accent-border); background: #f8fbf9; }
+  .pl-step.current { border-color: var(--accent); background: #f1f9f4; box-shadow: 0 0 0 2px rgba(29,122,82,0.10); }
+  .pl-step.done { border-color: #bbf7d0; background: #f4fdf7; }
+  .pl-step-num {
+    width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 12px; font-weight: 800;
+    background: var(--bg-subtle); color: var(--ink-2);
+  }
+  .pl-step.current .pl-step-num { background: var(--accent); color: #fff; }
+  .pl-step.done .pl-step-num { background: #16a34a; color: #fff; }
+  .pl-step-txt strong { display: block; font-size: 12.5px; color: var(--ink); line-height: 1.2; }
+  .pl-step-txt span { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.25; }
+  .pl-subpanel {
+    margin-bottom: 10px; padding: 10px 12px; border-radius: 11px;
+    background: var(--card-soft); border: 1px solid var(--border);
+  }
 
   .pl-stamp-bar {
     background: linear-gradient(180deg, #f3faf6, #f8fbf9);
@@ -880,31 +906,52 @@
   <!-- TAB 4: PLANT LISTS (2-LINE TRACKER) -->
   <section id="view_lists" style="display:none;">
     <div class="panel" id="plDropZone" ondragover="event.preventDefault(); this.classList.add('pl-drop-active');" ondragleave="this.classList.remove('pl-drop-active');" ondrop="handlePlDrop(event)">
-      <div class="row" style="justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+      <div class="row" style="justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
         <div>
           <h2>Plant Lists</h2>
-          <div style="font-size:12.5px; color:var(--muted);">Upload or drop an Excel (.xlsx) or CSV list — each line gets a tracking row underneath with ✅ green tick or 🟡 yellow circle, count, bench &amp; location.</div>
+          <div style="font-size:12.5px; color:var(--muted);">3 easy steps: upload your Excel list, tick plants done, then download your updated sheet.</div>
         </div>
         <div class="row" style="gap:6px;">
-          <label class="btn sm green" for="plFileIn" style="cursor:pointer;">📂 Upload Excel / CSV</label>
+          <label class="btn sm green" for="plFileIn" style="cursor:pointer;">📂 Upload Excel</label>
           <input type="file" id="plFileIn" accept=".xlsx,.csv,.txt" style="display:none;" onchange="importPlantListFile(event)">
-          <button type="button" class="btn sm soft-blue" onclick="toggleLiveDrawer(true)">✨ Ask AI</button>
-          <button type="button" class="btn sm" onclick="togglePlPastePanel()">+ Add / Paste</button>
           <button type="button" class="btn sm primary" id="plDlXlsxBtn" onclick="exportPlantListXLSX()" style="display:none;">📥 Download Excel</button>
-          <button type="button" class="btn sm" id="plDlCsvBtn" onclick="exportPlantListCSV()" style="display:none;">📄 CSV</button>
-          <button type="button" class="btn sm" id="plPrintBtn" onclick="printPlantList()" style="display:none;">🖨️ Print</button>
+          <button type="button" class="btn sm soft-blue" onclick="toggleLiveDrawer(true)">✨ Ask AI</button>
+          <button type="button" class="btn sm" id="plMoreBtn" onclick="togglePlPanel('plMoreMenu', 'plMoreBtn', 'More')">More ▾</button>
         </div>
       </div>
 
-      <!-- SAVED LIST SWITCHER -->
+      <!-- COLLAPSIBLE MORE TOOLS -->
+      <div id="plMoreMenu" class="pl-subpanel" style="display:none;">
+        <div class="row" style="gap:6px;">
+          <button type="button" class="btn sm" onclick="togglePlPastePanel(); togglePlPanel('plMoreMenu','plMoreBtn','More', false);">+ Add / Paste Lines</button>
+          <button type="button" class="btn sm" id="plDlCsvBtn" onclick="exportPlantListCSV()" style="display:none;">📄 Download CSV</button>
+          <button type="button" class="btn sm" id="plPrintBtn" onclick="printPlantList()" style="display:none;">🖨️ Print List</button>
+          <button type="button" class="btn sm" id="plRenameBtn" onclick="renameActivePlantList()" style="display:none;">✎ Rename List</button>
+          <button type="button" class="btn sm ghost" id="plDelListBtn" style="color:var(--red); display:none;" onclick="deleteActivePlantList()">🗑 Delete List</button>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE 3-STEP GUIDE -->
+      <div class="pl-steps" id="plStepsBar">
+        <button type="button" class="pl-step current" id="plStep1" onclick="document.getElementById('plFileIn').click();">
+          <span class="pl-step-num" id="plStep1Num">1</span>
+          <span class="pl-step-txt"><strong>Step 1 · Upload Excel</strong><span id="plStep1Sub">Tap here to pick your .xlsx or .csv file</span></span>
+        </button>
+        <button type="button" class="pl-step" id="plStep2" onclick="focusPlStep2();">
+          <span class="pl-step-num" id="plStep2Num">2</span>
+          <span class="pl-step-txt"><strong>Step 2 · Tick Plants Done</strong><span id="plStep2Sub">Pick a bench below, then tap ✓ Done</span></span>
+        </button>
+        <button type="button" class="pl-step" id="plStep3" onclick="if(getActivePlantList()){exportPlantListXLSX();}else{toast('Upload a list in Step 1 first');}">
+          <span class="pl-step-num" id="plStep3Num">3</span>
+          <span class="pl-step-txt"><strong>Step 3 · Download Excel</strong><span id="plStep3Sub">Save your updated list back to Excel</span></span>
+        </button>
+      </div>
+
+      <!-- SAVED LIST SWITCHER (SHOWN WHEN YOU HAVE A LIST) -->
       <div id="plListBar" class="pl-list-bar" style="display:none;">
         <div class="row" style="gap:7px; flex:1; min-width:200px;">
-          <span class="chip-label">Active List</span>
-          <select id="plActiveSel" onchange="selectPlantList(this.value)" style="flex:1; max-width:340px; padding:6px 9px; font-weight:700;"></select>
-        </div>
-        <div class="row" style="gap:5px;">
-          <button type="button" class="btn sm" onclick="renameActivePlantList()">✎ Rename</button>
-          <button type="button" class="btn sm ghost" style="color:var(--red);" onclick="deleteActivePlantList()">🗑 Delete</button>
+          <span class="chip-label">Your List</span>
+          <select id="plActiveSel" onchange="selectPlantList(this.value)" style="flex:1; max-width:360px; padding:6px 9px; font-weight:700;"></select>
         </div>
       </div>
 
@@ -948,21 +995,18 @@
         </div>
         <div id="plReqSummary" class="pl-req-bar"></div>
 
-        <!-- QUICK-STAMP LOCATION BAR (FASTER THAN REPEATING DROPDOWNS!) -->
+        <!-- SIMPLE BENCH PICKER (QUICK-STAMP) -->
         <div class="pl-stamp-bar" id="plStampBar">
           <div class="pl-stamp-head">
             <div class="row" style="gap:7px;">
-              <strong style="font-size:13px; color:var(--primary);">⚡ Quick-Stamp Bench</strong>
-              <span style="font-size:12px; color:var(--muted);">Pick your bench once, then tap <strong>✓ Stamp</strong> on any row to mark it ✅ done here in 1 tap.</span>
+              <strong style="font-size:13px; color:var(--primary);">📍 Where are you placing plants?</strong>
+              <span style="font-size:12px; color:var(--muted);">(Optional) Pick once, then tap <strong>✓ Stamp</strong> on any plant below.</span>
             </div>
-            <label class="row" style="gap:5px; font-size:12px; font-weight:600; color:var(--ink-2); cursor:pointer;">
-              <input type="checkbox" id="plSyncZonesChk" onchange="plStamp.syncZones=this.checked;">
-              Also log to Zones tab
-            </label>
+            <button type="button" class="btn sm ghost" id="plStampOptBtn" onclick="togglePlPanel('plStampExtra', 'plStampOptBtn', 'Options')">Options ▾</button>
           </div>
           <div class="pl-stamp-controls">
             <select id="plStampZone" onchange="onPlStampZoneChange(this.value)">
-              <option value="">No stamp zone</option>
+              <option value="">Choose Zone...</option>
               <option value="12">Zone 12 (1–25 L/R)</option><option value="11">Zone 11 (1–25 L/R)</option><option value="10">Zone 10 (1–25 L/R)</option>
               <option value="9">Zone 9 (1–25 L/R)</option><option value="8">Zone 8 (1–15 L/M/R)</option><option value="7">Zone 7 (1–25 L/R)</option>
               <option value="6">Zone 6 (1–25 L/R)</option><option value="5">Zone 5 (1–25 L/R)</option><option value="4">Zone 4 (1–25 L/R)</option>
@@ -978,9 +1022,8 @@
               <option value="L">Left (L)</option>
               <option value="R">Right (R)</option>
             </select>
-            <input type="text" id="plStampCustomBench" placeholder="Or custom (e.g. 14L)" style="width:140px;" oninput="plStamp.customBench=this.value.trim().toUpperCase(); renderPlantListItems();">
             <select id="plStampLoc" onchange="onPlStampLocChange(this.value)">
-              <option value="">Location / Spot...</option>
+              <option value="">Spot (optional)...</option>
               <option value="Front">Front</option>
               <option value="Middle">Middle</option>
               <option value="Back">Back</option>
@@ -989,39 +1032,54 @@
               <option value="Under Bench">Under Bench</option>
               <option value="Hanging">Hanging</option>
             </select>
-            <input type="text" id="plStampCustomLoc" placeholder="Exact spot (e.g. Bay 2)" style="width:155px;" oninput="plStamp.customLoc=this.value.trim(); renderPlantListItems();">
             <button type="button" class="btn sm ghost" onclick="clearPlStamp()">Clear</button>
+          </div>
+          <div id="plStampExtra" class="row" style="display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--accent-border); gap:8px;">
+            <input type="text" id="plStampCustomBench" placeholder="Custom bench (e.g. 14L)" style="width:155px;" oninput="plStamp.customBench=this.value.trim().toUpperCase(); renderPlantListItems();">
+            <input type="text" id="plStampCustomLoc" placeholder="Exact spot (e.g. Bay 2)" style="width:155px;" oninput="plStamp.customLoc=this.value.trim(); renderPlantListItems();">
+            <label class="row" style="gap:5px; font-size:12px; font-weight:600; color:var(--ink-2); cursor:pointer;">
+              <input type="checkbox" id="plSyncZonesChk" onchange="plStamp.syncZones=this.checked;">
+              Also copy to Production Counts
+            </label>
           </div>
         </div>
 
-        <!-- SEARCH & FILTERS -->
+        <!-- SIMPLE SEARCH & STATUS ROW -->
         <div class="row" style="margin-bottom:8px; gap:6px;">
-          <input type="text" id="plSearch" placeholder="Search plant, code, spec, supplier, bench, location..." style="flex:2; min-width:180px;" oninput="plPageLimit=50; renderPlantListItems();">
-          <select id="plWeekFilter" onchange="plPageLimit=50; renderPlantListItems();" style="display:none;">
-            <option value="ALL">All Plug Weeks</option>
-          </select>
-          <select id="plSpecFilter" onchange="plPageLimit=50; renderPlantListItems();" style="display:none;">
-            <option value="ALL">All Pot Sizes</option>
-          </select>
-          <select id="plZoneFilter" onchange="plPageLimit=50; renderPlantListItems();">
-            <option value="ALL">All Locations</option>
-            <option value="ASSIGNED">Has Bench / Location</option>
-            <option value="UNASSIGNED">No Bench Yet</option>
-          </select>
-          <select id="plSortSel" onchange="renderPlantListItems();">
-            <option value="orig">Original Order</option>
-            <option value="az">A–Z Plant</option>
-            <option value="todo_first">To Do First</option>
-            <option value="done_first">Done First</option>
-            <option value="week">Plug Week</option>
-          </select>
+          <input type="text" id="plSearch" placeholder="🔍 Search plant name, pot size, or bench..." style="flex:2; min-width:180px;" oninput="plPageLimit=50; renderPlantListItems();">
+          <button type="button" class="btn sm" id="plFilterToggleBtn" onclick="togglePlPanel('plFilterDrawer', 'plFilterToggleBtn', 'Filters & Bulk')">Filters &amp; Bulk ▾</button>
         </div>
+
+        <!-- COLLAPSIBLE EXTRA FILTERS & BULK -->
+        <div id="plFilterDrawer" class="pl-subpanel" style="display:none;">
+          <div class="row" style="gap:6px;">
+            <select id="plWeekFilter" onchange="plPageLimit=50; renderPlantListItems();" style="display:none;">
+              <option value="ALL">All Plug Weeks</option>
+            </select>
+            <select id="plSpecFilter" onchange="plPageLimit=50; renderPlantListItems();" style="display:none;">
+              <option value="ALL">All Pot Sizes</option>
+            </select>
+            <select id="plZoneFilter" onchange="plPageLimit=50; renderPlantListItems();">
+              <option value="ALL">All Locations</option>
+              <option value="ASSIGNED">Has Bench / Location</option>
+              <option value="UNASSIGNED">No Bench Yet</option>
+            </select>
+            <select id="plSortSel" onchange="renderPlantListItems();">
+              <option value="orig">Original Order</option>
+              <option value="az">A–Z Plant</option>
+              <option value="todo_first">To Do First</option>
+              <option value="done_first">Done First</option>
+              <option value="week">Plug Week</option>
+            </select>
+            <button type="button" class="filter-pill" id="plBulkToggleBtn" onclick="togglePlBulkMode()">☑ Bulk Select</button>
+          </div>
+        </div>
+
         <div class="row" style="margin-bottom:11px; gap:5px;">
           <button type="button" class="filter-pill active" id="plf_all" onclick="setPlStatusFilter('all')">All</button>
           <button type="button" class="filter-pill" id="plf_done" onclick="setPlStatusFilter('done')">✅ Done</button>
           <button type="button" class="filter-pill" id="plf_partial" onclick="setPlStatusFilter('partial')">🟡 In Progress</button>
           <button type="button" class="filter-pill" id="plf_todo" onclick="setPlStatusFilter('todo')">🟡 To Do</button>
-          <button type="button" class="filter-pill" id="plBulkToggleBtn" onclick="togglePlBulkMode()">☑ Bulk Select</button>
           <span id="plMatchInfo" style="margin-left:auto; font-size:12px; color:var(--muted); font-weight:600;"></span>
         </div>
 
@@ -1043,12 +1101,12 @@
 
       <!-- EMPTY STATE -->
       <div id="plEmptyState" class="empty-box">
-        <strong>No plant list loaded yet</strong>
-        <p style="margin:6px auto 14px; max-width:480px;">Upload any Excel (<code>.xlsx</code>) or CSV planting list. Every plant line automatically gets a second line underneath with a <strong>✅ green tick</strong> or <strong>🟡 yellow circle</strong>, count done, bench, and location — and you can download the updated list back to Excel anytime.</p>
+        <strong style="font-size:16px;">Start here: upload your Excel plant list</strong>
+        <p style="margin:6px auto 14px; max-width:440px;">Each plant gets a simple tracking line underneath showing <b>Required</b>, <b>Done</b>, <b>Left</b>, and its <b>Bench</b>.</p>
         <div class="row" style="justify-content:center; gap:8px;">
-          <label class="btn green" for="plFileIn" style="cursor:pointer;">📂 Upload Excel (.xlsx) or CSV</label>
-          <button type="button" class="btn" onclick="togglePlPastePanel(true)">📋 Paste / Type Lines</button>
-          <button type="button" class="btn soft-blue" onclick="loadSamplePlantList()">🧪 Try 5-Line Practice Sample</button>
+          <label class="btn green" for="plFileIn" style="cursor:pointer; padding:10px 18px; font-size:14px;">📂 Step 1: Upload Excel / CSV</label>
+          <button type="button" class="btn soft-blue" onclick="loadSamplePlantList()">🧪 Practice with 5 Sample Plants</button>
+          <button type="button" class="btn ghost" onclick="togglePlPastePanel(true)">+ Type or Paste Instead</button>
         </div>
       </div>
     </div>
@@ -3894,14 +3952,50 @@ function plBulkReset() {
   renderAll();
   toast(`Reset ${ids.length} lines to To Do`);
 }
+function togglePlPanel(panelId, btnId, baseLabel, force) {
+  const el = document.getElementById(panelId);
+  if (!el) return;
+  const open = typeof force === 'boolean' ? force : (el.style.display === 'none' || !el.style.display);
+  el.style.display = open ? 'block' : 'none';
+  const btn = document.getElementById(btnId);
+  if (btn && baseLabel) btn.textContent = open ? `${baseLabel} ▴` : `${baseLabel} ▾`;
+}
+function focusPlStep2() {
+  const list = getActivePlantList();
+  if (!list) { toast('Start with Step 1 — upload your Excel file first'); document.getElementById('plFileIn')?.click(); return; }
+  const bar = document.getElementById('plStampBar');
+  if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('plStampZone')?.focus();
+}
+function updatePlStepsUI() {
+  const list = getActivePlantList();
+  const s1 = document.getElementById('plStep1'), s2 = document.getElementById('plStep2'), s3 = document.getElementById('plStep3');
+  if (!s1 || !s2 || !s3) return;
+  const hasList = !!(list && list.items.length);
+  const tracked = hasList ? list.items.filter(it => plEffectiveStatus(it) !== 'todo').length : 0;
+  const doneCnt = hasList ? list.items.filter(it => plEffectiveStatus(it) === 'done').length : 0;
+
+  s1.className = 'pl-step ' + (hasList ? 'done' : 'current');
+  document.getElementById('plStep1Num').textContent = hasList ? '✓' : '1';
+  document.getElementById('plStep1Sub').textContent = hasList ? `Loaded: ${list.name} (${list.items.length} lines)` : 'Tap here to pick your .xlsx or .csv file';
+
+  s2.className = 'pl-step ' + (!hasList ? '' : (tracked > 0 ? 'done' : 'current'));
+  document.getElementById('plStep2Num').textContent = tracked > 0 ? '✓' : '2';
+  document.getElementById('plStep2Sub').textContent = tracked > 0 ? `${doneCnt} done · ${tracked - doneCnt} in progress` : 'Pick a bench below, then tap ✓ Done';
+
+  s3.className = 'pl-step ' + (tracked > 0 ? 'current' : '');
+  document.getElementById('plStep3Num').textContent = '3';
+  document.getElementById('plStep3Sub').textContent = tracked > 0 ? 'Ready! Tap to download updated Excel' : 'Save your updated list back to Excel';
+}
+
 function plQuickFilterChip(kind, val) {
   plPageLimit = 50;
   if (kind === 'wk') {
     const el = document.getElementById('plWeekFilter');
-    if (el) { el.value = el.value === val ? 'ALL' : val; }
+    if (el) { el.value = el.value === val ? 'ALL' : val; togglePlPanel('plFilterDrawer', 'plFilterToggleBtn', 'Filters & Bulk', true); }
   } else if (kind === 'spec') {
     const el = document.getElementById('plSpecFilter');
-    if (el && val) { el.value = el.value === val ? 'ALL' : val; }
+    if (el && val) { el.value = el.value === val ? 'ALL' : val; togglePlPanel('plFilterDrawer', 'plFilterToggleBtn', 'Filters & Bulk', true); }
   } else if (kind === 'search') {
     const el = document.getElementById('plSearch');
     if (el) { el.value = el.value.toLowerCase() === val.toLowerCase() ? '' : val; }
@@ -3951,10 +4045,11 @@ function renderPlantLists() {
   const hasLists = (appState.plantLists || []).length > 0;
   document.getElementById('plEmptyState').style.display = hasLists ? 'none' : 'block';
   document.getElementById('plActiveWrap').style.display = hasLists ? 'block' : 'none';
-  document.getElementById('plListBar').style.display = hasLists ? 'flex' : 'none';
-  ['plDlXlsxBtn','plDlCsvBtn','plPrintBtn'].forEach(id => {
+  document.getElementById('plListBar').style.display = (appState.plantLists || []).length > 1 ? 'flex' : 'none';
+  ['plDlXlsxBtn','plDlCsvBtn','plPrintBtn','plRenameBtn','plDelListBtn'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = hasLists ? 'inline-flex' : 'none';
   });
+  updatePlStepsUI();
   if (!hasLists || !list) return;
 
   const sel = document.getElementById('plActiveSel');
@@ -4006,6 +4101,7 @@ function renderPlantLists() {
 
 function renderPlantListItems() {
   const list = getActivePlantList(); if (!list) return;
+  updatePlStepsUI();
   let done = 0, part = 0, todo = 0, totReq = 0, totDone = 0;
   list.items.forEach(it => {
     const st = plEffectiveStatus(it);
